@@ -1,0 +1,53 @@
+[project]
+name = 'btcuni'
+description = ''
+authors = []
+telemetry = false
+cache_dir = './.cache'
+
+[[project.requirements]]
+contract_id = 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait'
+
+[[project.requirements]]
+contract_id = 'ST1S5ZGRZV5K4S9205RWPRTX9RGS9JV40KQMR4G1J.trait-dia-oracle'
+
+[[project.requirements]]
+contract_id = 'SP1G48FZ4Y7JY8G2Z0N51QTCYGBQ6F4J43J77BQC0.trait-dia-oracle'
+
+[[project.requirements]]
+contract_id = 'ST1S5ZGRZV5K4S9205RWPRTX9RGS9JV40KQMR4G1J.dia-oracle'
+
+
+[[project.requirements]]
+contract_id = 'ST1F7QA2MDF17S807EPA36TSS8AMEFY4KA9TVGWXT.sbtc-token'
+[contracts.btcuni]
+path = 'contracts/btcuni.clar'
+clarity_version = 3
+epoch = 3.1
+
+[contracts.btcuni-trait]
+path = 'contracts/btcuni-trait.clar'
+clarity_version = 3
+epoch = 3.1
+
+[contracts.btcuniNft]
+path = 'contracts/btcuniNft.clar'
+clarity_version = 3
+epoch = 3.1
+
+[contracts.btcuninfttrait]
+path = 'contracts/btcuninfttrait.clar'
+clarity_version = 3
+epoch = 3.1
+[repl.analysis]
+passes = ['check_checker']
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = false
+trusted_caller = false
+callee_filter = false
+
+[repl.remote_data]
+enabled = false
+api_url = 'https://api.hiro.so'
