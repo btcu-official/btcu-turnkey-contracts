@@ -1,0 +1,24 @@
+# Clarinet specific files
+.env
+Clarinet.toml
+Clarinet-deps.lock
+
+# Test artifacts
+/coverage/
+
+# Node.js artifacts for JS-based tests
+/node_modules/
+
+# OS-specific files
+.DS_Store
+.vscode/
+
+# Local IDE/editor files
+.idea/
+.vs/
+*.sublime-project
+*.sublime-workspace
+
+/.history
+/.cache
+/.settings/Testnet.toml

@@ -142,14 +142,14 @@
 ;; =========================
 
 ;; Owner adds a course
-(define-public (add-course (name (string-ascii 100)) (details (string-ascii 256)) (price uint) (max-students uint))
+(define-public (add-course (name (string-ascii 100)) (details (string-ascii 256)) (instructor principal) (price uint) (max-students uint))
   (begin
     (asserts! (is-eq tx-sender UNI-OWNER) ERR-OWNER-ONLY)
     (let ((new-course-id (+ (var-get course-id) u1)))
       (var-set course-id new-course-id)
       (map-set courses 
         { course-id: new-course-id } 
-        { name: name, details: details, price: price, instructor: tx-sender, max-students: max-students }
+        { name: name, details: details, price: price, instructor: instructor, max-students: max-students }
       )
       (print "{tx-sender} Added course {name} with id {new-course-id}")
       (ok new-course-id)
