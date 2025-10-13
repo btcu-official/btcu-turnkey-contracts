@@ -1,6 +1,6 @@
 # BTCUNI Smart Contract
 
-BTCUNI is a decentralized learning platform implemented in Clarity on the Stacks blockchain. It allows instructors to create courses, students to enroll using sBTC, and supports a whitelist mechanism for beta access.
+BTCUNI is a decentralized learning platform implemented in Clarity on the Stacks blockchain. It allows  contract owner to create courses on behalf instructors , students to enroll using sBTC, and supports a whitelist mechanism for beta access.
 
 ---
 
@@ -16,7 +16,10 @@ BTCUNI is a decentralized learning platform implemented in Clarity on the Stacks
   Students can enroll in courses using sBTC. The contract handles sBTC transfers and maintains an escrow for course fees.
 
 - **Completion Tracking**  
-  Instructors or the contract owner can mark courses as completed for students.
+  the contract owner can mark courses as completed for students.
+  
+  - **Course Completion Nft**  
+ the contract owner will mint course completion nft WRT students upon course completions.
 
 - **Instructor Fee Claim**  
   Instructors can claim accumulated sBTC fees for their courses from the contract escrow.
