@@ -16,16 +16,16 @@
 (define-constant ERR-UNAUTHORIZED          (err u108))
 
 ;; sBTC related constants
-(define-constant MIN-SBTC-BALANCE           u10) ;; 10 USD
+(define-constant MIN-SBTC-BALANCE           u100000) ;; 0.001 BTC (100,000 satoshis)
 (define-constant ERR-READING-SBTC-BALANCE   (err u7001))
 (define-constant ERR-NOT-ENOUGH-SBTC        (err u7002))
 (define-constant ERR-NOT-OWNER              (err u7003))
-(define-constant SBTC-PRICE-EXPO            u8)
 
 ;; =========================
 ;; Data Variables & Constants
 ;; =========================
 (define-constant UNI-OWNER tx-sender)
+(define-constant CONTRACT-PRINCIPAL (as-contract tx-sender))
 (define-constant COURSE-PRICE u10000000) ;; 1 USD in micro units
 (define-data-var course-id uint u0)
 
@@ -48,11 +48,6 @@
   { paid: bool, enrolled: bool, completion: bool }
 )
 
-(define-map student-courses
-  { student: principal, course-id: uint }
-  { paid: bool, enrolled: bool, completion: bool }
-)
-
 (define-map course-fees
   { course-id: uint }
   { total: uint }
@@ -66,16 +61,6 @@
 ;; User self-enroll to whitelist if enough sBTC balance
 (define-public (enroll-whitelist)
   (let (
-      (sbtc-price-data 
-        (unwrap-panic 
-          (contract-call? 'ST1S5ZGRZV5K4S9205RWPRTX9RGS9JV40KQMR4G1J.dia-oracle
-            get-value 
-            "sBTC/USD"
-          )
-        )
-      )
-      (sbtc-price (get value sbtc-price-data))
-      (price-denominator (pow u10 SBTC-PRICE-EXPO))
       (user-sbtc-balance 
         (unwrap! 
           (contract-call? 
@@ -86,10 +71,8 @@
           ERR-READING-SBTC-BALANCE
         )
       )
-      (user-usd-value (/ (* user-sbtc-balance sbtc-price) price-denominator))
-      (min-usd-value (* MIN-SBTC-BALANCE price-denominator))
     )
-    (if (>= user-usd-value min-usd-value)
+    (if (>= user-sbtc-balance MIN-SBTC-BALANCE)
         (begin
           (map-set whitelisted-beta { student: tx-sender } { whitelisted: true })
           (ok true))
@@ -167,6 +150,19 @@
   (ok (var-get course-id))
 )
 
+;; Get all courses (returns list of course IDs with their details)
+(define-read-only (get-all-courses)
+  (ok (map get-course-by-index (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10 u11 u12 u13 u14 u15 u16 u17 u18 u19 u20)))
+)
+
+;; Helper function to get course by index
+(define-private (get-course-by-index (index uint))
+  (if (<= index (var-get course-id))
+    (map-get? courses { course-id: index })
+    none
+  )
+)
+
 ;; =========================
 ;; Enrollment Functions
 ;; =========================
@@ -176,6 +172,27 @@
   (match (map-get? enrollments { course-id: id, student: student }) enrollment
     (ok (get enrolled enrollment))
     ERR-USER-NOT-ENROLLED
+  )
+)
+
+;; Get all enrolled course IDs for a student
+;; Returns a list of course IDs where the student is enrolled
+(define-read-only (get-enrolled-ids (student principal))
+  (let (
+      (max-courses (var-get course-id))
+      (result (fold append-if-enrolled (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10 u11 u12 u13 u14 u15 u16 u17 u18 u19 u20) 
+                { student: student, max: max-courses, enrolled: (list) }))
+    )
+    (ok (get enrolled result))
+  )
+)
+
+;; Helper fold function to build list of enrolled course IDs
+(define-private (append-if-enrolled (cid uint) (acc { student: principal, max: uint, enrolled: (list 20 uint) }))
+  (if (and (<= cid (get max acc))
+           (is-some (map-get? enrollments { course-id: cid, student: (get student acc) })))
+      { student: (get student acc), max: (get max acc), enrolled: (unwrap-panic (as-max-len? (append (get enrolled acc) cid) u20)) }
+      acc
   )
 )
 
@@ -212,7 +229,7 @@
       )
     (if (not (get whitelisted whitelist))
         ERR-USER-NOT-WHITELISTED
-        (if (is-some (map-get? student-courses { student: tx-sender, course-id: enroll-course-id }))
+        (if (is-some (map-get? enrollments { course-id: enroll-course-id, student: tx-sender }))
             ERR-ALREADY-ENROLLED
             (begin
               ;; Transfer sBTC from student to contract escrow (4 arguments)
@@ -222,15 +239,15 @@
                   transfer
                   (get price course)        ;; amount
                   tx-sender                 ;; sender
-                  (as-contract tx-sender)   ;; recipient (contract escrow)
+                  CONTRACT-PRINCIPAL        ;; recipient (contract escrow)
                   none                       ;; memo
                 )
                 ERR-NOT-ENOUGH-SBTC
               )
 
               ;; Record enrollment
-              (map-set student-courses
-                { student: tx-sender, course-id: enroll-course-id }
+              (map-set enrollments
+                { course-id: enroll-course-id, student: tx-sender }
                 { paid: true, enrolled: true, completion: false })
 
               ;; Add to course fees
@@ -263,14 +280,15 @@
 
       ;; Transfer total fees from contract escrow to instructor
       (unwrap!
-        (contract-call?
-          'ST1F7QA2MDF17S807EPA36TSS8AMEFY4KA9TVGWXT.sbtc-token
-          transfer
-          total-fees
-          (as-contract tx-sender)
-          tx-sender
-          
-          none
+        (as-contract
+          (contract-call?
+            'ST1F7QA2MDF17S807EPA36TSS8AMEFY4KA9TVGWXT.sbtc-token
+            transfer
+            total-fees
+            CONTRACT-PRINCIPAL
+            instructor
+            none
+          )
         )
         ERR-NOT-ENOUGH-SBTC
       )

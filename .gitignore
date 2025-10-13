@@ -22,3 +22,6 @@ Clarinet-deps.lock
 /.history
 /.cache
 /.settings/Testnet.toml
+
+deployments/
+settings/
