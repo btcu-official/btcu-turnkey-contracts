@@ -7,23 +7,14 @@ cache_dir = './.cache'
 
 [[project.requirements]]
 contract_id = 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait'
-[contracts.btcuni]
-path = 'contracts/btcuni.clar'
+
+[contracts.btc-university]
+path = 'contracts/btc-university.clar'
 clarity_version = 3
 epoch = 3.1
 
-[contracts.btcuni-trait]
-path = 'contracts/btcuni-trait.clar'
-clarity_version = 3
-epoch = 3.1
-
-[contracts.btcuniNft]
-path = 'contracts/btcuniNft.clar'
-clarity_version = 3
-epoch = 3.1
-
-[contracts.btcuninfttrait]
-path = 'contracts/btcuninfttrait.clar'
+[contracts.btc-university-nft]
+path = 'contracts/btc-university-nft.clar'
 clarity_version = 3
 epoch = 3.1
 [repl.analysis]

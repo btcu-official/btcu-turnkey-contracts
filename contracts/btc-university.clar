@@ -1,10 +1,4 @@
 ;; =========================
-;; Trait Import
-;; =========================
-(impl-trait .btcuni-trait.BTCUNI)
-
-
-;; =========================
 ;; Error Codes
 ;; =========================
 (define-constant ERR-OWNER-ONLY            (err u100))

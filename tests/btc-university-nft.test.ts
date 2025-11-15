@@ -15,7 +15,8 @@ describe("example tests", () => {
   });
 
   // it("shows an example", () => {
-  //   const { result } = simnet.callReadOnlyFn("counter", "get-counter", [], address1);
+  //   const { result } = simnet.callReadOnlyFn("btc-university-nft", "get-counter", [], address1);
   //   expect(result).toBeUint(0);
   // });
 });
+

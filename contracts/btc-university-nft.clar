@@ -1,7 +1,5 @@
-;; btcuni courses NFT contract
-;; This contract allows minting of NFTs representing courses on the btcuni platform.    
-
-(impl-trait .btcuninfttrait.nft-trait)
+;; BTC University courses NFT contract
+;; This contract allows minting of NFTs representing courses on the BTC University platform.
 
 ;;constants
 
@@ -46,3 +44,4 @@
 		(ok token-id)
 	)
 )
+
