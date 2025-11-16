@@ -1,3 +1,6 @@
+;; BTC University - Production Contract with Trait-Based sBTC
+;; This version uses traits for dependency injection, making it testable
+
 ;; =========================
 ;; Error Codes
 ;; =========================
@@ -8,6 +11,8 @@
 (define-constant ERR-ALREADY-ENROLLED      (err u104))
 (define-constant ERR-NOT-ENOUGH-BALANCE    (err u107))
 (define-constant ERR-UNAUTHORIZED          (err u108))
+(define-constant ERR-INVALID-PRINCIPAL     (err u109))
+(define-constant ERR-INVALID-AMOUNT        (err u110))
 
 ;; sBTC related constants
 (define-constant MIN-SBTC-BALANCE           u100000) ;; 0.001 BTC (100,000 satoshis)
@@ -20,9 +25,19 @@
 ;; =========================
 (define-constant UNI-OWNER tx-sender)
 (define-constant CONTRACT-PRINCIPAL (as-contract tx-sender))
-(define-constant COURSE-PRICE u10000000) ;; 1 USD in micro units
+(define-constant COURSE-PRICE u10000000)
 (define-data-var course-id uint u0)
 
+;; Import the sBTC trait (matches real sBTC contract)
+(use-trait sbtc-trait .sip010-trait.sbtc-trait)
+
+;; SECURITY: Store the official sBTC contract address
+;; Owner sets this once during deployment/initialization
+;; This prevents clients from passing fake sBTC contracts
+(define-data-var sbtc-contract-address (optional principal) none)
+
+;; Error for uninitialized sBTC contract
+(define-constant ERR-SBTC-NOT-SET (err u7004))
 
 ;; =========================
 ;; Data Maps
@@ -47,25 +62,47 @@
   { total: uint }
 )
 
+;; =========================
+;; sBTC Configuration (SECURITY)
+;; =========================
+
+;; Owner sets the official sBTC contract address
+;; This MUST be called after deployment to enable sBTC functions
+;; For testing: set to mock-sbtc-token
+;; For production: set to official sBTC (ST1F7QA2MDF17S807EPA36TSS8AMEFY4KA9TVGWXT.sbtc-token)
+(define-public (set-sbtc-contract (new-sbtc-contract principal))
+  (begin
+    (asserts! (is-eq tx-sender UNI-OWNER) ERR-OWNER-ONLY)
+    ;; Trust owner to set valid contract address
+    (var-set sbtc-contract-address (some new-sbtc-contract))
+    (ok true)
+  )
+)
+
+;; Read-only function to get configured sBTC contract
+(define-read-only (get-sbtc-contract)
+  (var-get sbtc-contract-address)
+)
 
 ;; =========================
 ;; Whitelist Functions
 ;; =========================
 
 ;; User self-enroll to whitelist if enough sBTC balance
-(define-public (enroll-whitelist)
+;; SECURITY: Uses owner-configured sBTC contract, not client-provided
+(define-public (enroll-whitelist (sbtc-contract <sbtc-trait>))
   (let (
+      (configured-sbtc (unwrap! (var-get sbtc-contract-address) ERR-SBTC-NOT-SET))
       (user-sbtc-balance 
         (unwrap! 
-          (contract-call? 
-            'ST1F7QA2MDF17S807EPA36TSS8AMEFY4KA9TVGWXT.sbtc-token
-            get-balance-available 
-            tx-sender
-          )
+          (contract-call? sbtc-contract get-balance-available tx-sender)
           ERR-READING-SBTC-BALANCE
         )
       )
     )
+    ;; SECURITY CHECK: Verify the passed contract matches the configured one
+    (asserts! (is-eq (contract-of sbtc-contract) configured-sbtc) ERR-UNAUTHORIZED)
+    
     (if (>= user-sbtc-balance MIN-SBTC-BALANCE)
         (begin
           (map-set whitelisted-beta { student: tx-sender } { whitelisted: true })
@@ -79,8 +116,10 @@
 (define-public (add-whitelist (student principal)) 
   (begin
     (asserts! (is-eq tx-sender UNI-OWNER) ERR-OWNER-ONLY)
+    ;; Validate student is a standard principal
+    (asserts! (is-standard student) ERR-INVALID-PRINCIPAL)
     (match (map-get? whitelisted-beta { student: student }) whitelisted
-      (err u104) ;; Already whitelisted
+      (err u104)
       (begin
         (map-set whitelisted-beta { student: student } { whitelisted: true })
         (print "{student} Added to whitelist")
@@ -94,6 +133,8 @@
 (define-public (remove-whitelist (student principal)) 
   (begin
     (asserts! (is-eq tx-sender UNI-OWNER) ERR-OWNER-ONLY)
+    ;; Validate student is a standard principal
+    (asserts! (is-standard student) ERR-INVALID-PRINCIPAL)
     (match (map-get? whitelisted-beta { student: student }) whitelisted
       (begin
         (map-delete whitelisted-beta { student: student })
@@ -113,15 +154,19 @@
   )
 )
 
-
 ;; =========================
 ;; Course Functions
 ;; =========================
 
-;; Owner adds a course
 (define-public (add-course (name (string-ascii 100)) (details (string-ascii 256)) (instructor principal) (price uint) (max-students uint))
   (begin
     (asserts! (is-eq tx-sender UNI-OWNER) ERR-OWNER-ONLY)
+    ;; Validate instructor is a standard principal
+    (asserts! (is-standard instructor) ERR-INVALID-PRINCIPAL)
+    ;; Validate name and details are not empty
+    (asserts! (> (len name) u0) ERR-INVALID-AMOUNT)
+    (asserts! (> (len details) u0) ERR-INVALID-AMOUNT)
+    ;; Note: price and max-students can be 0 (free courses, unlimited enrollment)
     (let ((new-course-id (+ (var-get course-id) u1)))
       (var-set course-id new-course-id)
       (map-set courses 
@@ -134,22 +179,18 @@
   )
 )
 
-;; Get course details
 (define-read-only (get-course-details (id uint))
   (ok (unwrap! (map-get? courses { course-id: id }) ERR-COURSE-NOT-FOUND))
 )
 
-;; Get total number of courses
 (define-read-only (get-course-count)
   (ok (var-get course-id))
 )
 
-;; Get all courses (returns list of course IDs with their details)
 (define-read-only (get-all-courses)
   (ok (map get-course-by-index (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10 u11 u12 u13 u14 u15 u16 u17 u18 u19 u20)))
 )
 
-;; Helper function to get course by index
 (define-private (get-course-by-index (index uint))
   (if (<= index (var-get course-id))
     (map-get? courses { course-id: index })
@@ -161,7 +202,6 @@
 ;; Enrollment Functions
 ;; =========================
 
-;; Check if a student is enrolled
 (define-read-only (is-enrolled (id uint) (student principal))
   (match (map-get? enrollments { course-id: id, student: student }) enrollment
     (ok (get enrolled enrollment))
@@ -169,8 +209,6 @@
   )
 )
 
-;; Get all enrolled course IDs for a student
-;; Returns a list of course IDs where the student is enrolled
 (define-read-only (get-enrolled-ids (student principal))
   (let (
       (max-courses (var-get course-id))
@@ -181,7 +219,6 @@
   )
 )
 
-;; Helper fold function to build list of enrolled course IDs
 (define-private (append-if-enrolled (cid uint) (acc { student: principal, max: uint, enrolled: (list 20 uint) }))
   (if (and (<= cid (get max acc))
            (is-some (map-get? enrollments { course-id: cid, student: (get student acc) })))
@@ -190,17 +227,21 @@
   )
 )
 
-;; Complete a course
 (define-public (complete-course (id uint) (student principal))
   (let (
         (enrollment (map-get? enrollments { course-id: id, student: student }))
         (course (map-get? courses { course-id: id }))
       )
+    ;; Validate student is a standard principal
+    (asserts! (is-standard student) ERR-INVALID-PRINCIPAL)
+    (asserts! (> id u0) ERR-INVALID-AMOUNT)
     (match enrollment enrollment-data
       (match course course-data
         (if (or (is-eq tx-sender (get instructor course-data))
                 (is-eq tx-sender UNI-OWNER))
           (begin
+            (asserts! (get paid enrollment-data) ERR-UNAUTHORIZED)
+            (asserts! (get enrolled enrollment-data) ERR-UNAUTHORIZED)
             (map-set enrollments 
               { course-id: id, student: student } 
               { paid: (get paid enrollment-data)
@@ -214,27 +255,32 @@
 )
 
 ;; =========================
-;; Enroll in a course using sBTC
+;; Enroll in a course using sBTC (with trait)
 ;; =========================
-(define-public (enroll-course (enroll-course-id uint))
+(define-public (enroll-course (enroll-course-id uint) (sbtc-contract <sbtc-trait>))
   (let (
+        (configured-sbtc (unwrap! (var-get sbtc-contract-address) ERR-SBTC-NOT-SET))
         (course (unwrap! (map-get? courses { course-id: enroll-course-id }) ERR-COURSE-NOT-FOUND))
         (whitelist (unwrap! (map-get? whitelisted-beta { student: tx-sender }) ERR-USER-NOT-WHITELISTED))
+        (course-price (get price course))
       )
+    ;; SECURITY CHECK: Verify the passed contract matches the configured one
+    (asserts! (is-eq (contract-of sbtc-contract) configured-sbtc) ERR-UNAUTHORIZED)
+    (asserts! (> enroll-course-id u0) ERR-INVALID-AMOUNT)
+    (asserts! (> course-price u0) ERR-INVALID-AMOUNT)
+    
     (if (not (get whitelisted whitelist))
         ERR-USER-NOT-WHITELISTED
         (if (is-some (map-get? enrollments { course-id: enroll-course-id, student: tx-sender }))
             ERR-ALREADY-ENROLLED
             (begin
-              ;; Transfer sBTC from student to contract escrow (4 arguments)
+              ;; Transfer sBTC from student to contract escrow using trait
               (unwrap! 
-                (contract-call? 
-                  'ST1F7QA2MDF17S807EPA36TSS8AMEFY4KA9TVGWXT.sbtc-token
-                  transfer
-                  (get price course)        ;; amount
-                  tx-sender                 ;; sender
-                  CONTRACT-PRINCIPAL        ;; recipient (contract escrow)
-                  none                       ;; memo
+                (contract-call? sbtc-contract transfer
+                  course-price
+                  tx-sender
+                  CONTRACT-PRINCIPAL
+                  none
                 )
                 ERR-NOT-ENOUGH-SBTC
               )
@@ -246,7 +292,7 @@
 
               ;; Add to course fees
               (let ((current-fees (default-to u0 (get total (map-get? course-fees { course-id: enroll-course-id })))))
-                (map-set course-fees { course-id: enroll-course-id } { total: (+ current-fees (get price course)) })
+                (map-set course-fees { course-id: enroll-course-id } { total: (+ current-fees course-price) })
               )
 
               (ok true)
@@ -256,28 +302,31 @@
   )
 )
 
-
-
 ;; =========================
-;; Instructor claim function
+;; Instructor claim function (with trait)
 ;; =========================
-(define-public (claim-course-fees (courses-id uint))
+(define-public (claim-course-fees (courses-id uint) (sbtc-contract <sbtc-trait>))
   (let (
+        (configured-sbtc (unwrap! (var-get sbtc-contract-address) ERR-SBTC-NOT-SET))
         (course (unwrap! (map-get? courses { course-id: courses-id }) ERR-COURSE-NOT-FOUND))
         (instructor (get instructor course))
       )
+    ;; SECURITY CHECK: Verify the passed contract matches the configured one
+    (asserts! (is-eq (contract-of sbtc-contract) configured-sbtc) ERR-UNAUTHORIZED)
+    (asserts! (> courses-id u0) ERR-INVALID-AMOUNT)
+    
     ;; Only instructor can claim
     (asserts! (is-eq tx-sender instructor) ERR-UNAUTHORIZED)
 
     ;; Get total fees for the course
     (let ((total-fees (default-to u0 (get total (map-get? course-fees { course-id: courses-id })))))
+      
+      ;; Note: total-fees can be 0, transfer will handle validation
 
-      ;; Transfer total fees from contract escrow to instructor
+      ;; Transfer total fees from contract escrow to instructor using trait
       (unwrap!
         (as-contract
-          (contract-call?
-            'ST1F7QA2MDF17S807EPA36TSS8AMEFY4KA9TVGWXT.sbtc-token
-            transfer
+          (contract-call? sbtc-contract transfer
             total-fees
             CONTRACT-PRINCIPAL
             instructor

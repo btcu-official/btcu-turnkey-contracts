@@ -29,12 +29,14 @@ export default defineConfig({
     },
     setupFiles: [
       vitestSetupFilePath,
-      // custom setup files can be added here
+      "./tests/setup.ts",
     ],
     environmentOptions: {
       clarinet: {
         ...getClarinetVitestsArgv(),
         // add or override options
+        deploymentPlanPath: "./deployments/default.simnet-plan.yaml",
+        manifestPath: "./Clarinet.toml",
       },
     },
   },

@@ -6,6 +6,7 @@
 (define-constant contract-owner  tx-sender)
 (define-constant err-owner-only  (err u100))
 (define-constant err-not-certi-holder  (err u101))
+(define-constant err-invalid-principal  (err u102))
 
 
 ;;BTCuni NFT
@@ -39,6 +40,8 @@
 			(token-id (+ (var-get last-token-id) u1))
 		)
 		(asserts! (is-eq contract-caller contract-owner) err-owner-only)
+		;; Validate recipient is provided (not checking specific addresses)
+		(asserts! (is-standard for) err-invalid-principal)
 		(try! (nft-mint? BTCUni token-id for))
 		(var-set last-token-id token-id)
 		(ok token-id)

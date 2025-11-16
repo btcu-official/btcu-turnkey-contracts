@@ -8,6 +8,11 @@ cache_dir = './.cache'
 [[project.requirements]]
 contract_id = 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait'
 
+[contracts.sip010-trait]
+path = 'contracts/sip010-trait.clar'
+clarity_version = 3
+epoch = 3.1
+
 [contracts.btc-university]
 path = 'contracts/btc-university.clar'
 clarity_version = 3
@@ -17,6 +22,12 @@ epoch = 3.1
 path = 'contracts/btc-university-nft.clar'
 clarity_version = 3
 epoch = 3.1
+
+[contracts.mock-sbtc-token]
+path = 'contracts/mock-sbtc-token.clar'
+clarity_version = 3
+epoch = 3.1
+
 [repl.analysis]
 passes = ['check_checker']
 

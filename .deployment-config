@@ -1,0 +1,23 @@
+# sBTC Contract Addresses
+
+## Testnet
+ST1F7QA2MDF17S807EPA36TSS8AMEFY4KA9TVGWXT.sbtc-token
+
+## Mainnet
+SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token
+
+## Quick Deploy Commands
+
+### Test locally
+npm test
+
+### Deploy to Testnet
+clarinet deployments generate --testnet
+clarinet deployments apply --testnet
+
+### Deploy to Mainnet
+clarinet deployments generate --mainnet
+clarinet deployments apply --mainnet
+
+## IMPORTANT: DON'T deploy mock-sbtc-token to production!
+
