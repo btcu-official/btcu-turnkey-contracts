@@ -4,7 +4,7 @@
 ;; =========================
 ;; Error Codes
 ;; =========================
-(define-constant ERR-OWNER-ONLY            (err u100))
+(define-constant ERR-INSTRUCTOR-ONLY       (err u100))
 (define-constant ERR-COURSE-NOT-FOUND      (err u101))
 (define-constant ERR-USER-NOT-WHITELISTED  (err u102))
 (define-constant ERR-USER-NOT-ENROLLED     (err u103))
@@ -23,7 +23,7 @@
 ;; =========================
 ;; Data Variables & Constants
 ;; =========================
-(define-constant UNI-OWNER tx-sender)
+(define-constant CONTRACT-DEPLOYER tx-sender)
 (define-constant CONTRACT-PRINCIPAL (as-contract tx-sender))
 (define-constant COURSE-PRICE u10000000)
 (define-data-var course-id uint u0)
@@ -42,6 +42,11 @@
 ;; =========================
 ;; Data Maps
 ;; =========================
+(define-map instructors
+  { instructor: principal }
+  { authorized: bool }
+)
+
 (define-map whitelisted-beta 
   { student: principal } 
   { whitelisted: bool }
@@ -62,18 +67,46 @@
   { total: uint }
 )
 
+(define-map meeting-links
+  { course-id: uint }
+  { link: (string-ascii 256) }
+)
+
+;; =========================
+;; Instructor Functions
+;; =========================
+
+;; Check if an address is an instructor (including deployer)
+(define-read-only (is-instructor (address principal))
+  (or 
+    (is-eq address CONTRACT-DEPLOYER)
+    (default-to false (get authorized (map-get? instructors { instructor: address })))
+  )
+)
+
+;; Add a new instructor (only deployer or existing instructors)
+(define-public (add-instructor (new-instructor principal))
+  (begin
+    (asserts! (is-instructor tx-sender) ERR-INSTRUCTOR-ONLY)
+    (asserts! (is-standard new-instructor) ERR-INVALID-PRINCIPAL)
+    (map-set instructors { instructor: new-instructor } { authorized: true })
+    (print { event: "instructor-added", instructor: new-instructor, by: tx-sender })
+    (ok true)
+  )
+)
+
 ;; =========================
 ;; sBTC Configuration (SECURITY)
 ;; =========================
 
-;; Owner sets the official sBTC contract address
+;; Instructor sets the official sBTC contract address
 ;; This MUST be called after deployment to enable sBTC functions
 ;; For testing: set to mock-sbtc-token
 ;; For production: set to official sBTC (ST1F7QA2MDF17S807EPA36TSS8AMEFY4KA9TVGWXT.sbtc-token)
 (define-public (set-sbtc-contract (new-sbtc-contract principal))
   (begin
-    (asserts! (is-eq tx-sender UNI-OWNER) ERR-OWNER-ONLY)
-    ;; Trust owner to set valid contract address
+    (asserts! (is-instructor tx-sender) ERR-INSTRUCTOR-ONLY)
+    ;; Trust instructor to set valid contract address
     (var-set sbtc-contract-address (some new-sbtc-contract))
     (ok true)
   )
@@ -112,10 +145,10 @@
   )
 )
 
-;; Owner adds user to whitelist
+;; Instructor adds user to whitelist
 (define-public (add-whitelist (student principal)) 
   (begin
-    (asserts! (is-eq tx-sender UNI-OWNER) ERR-OWNER-ONLY)
+    (asserts! (is-instructor tx-sender) ERR-INSTRUCTOR-ONLY)
     ;; Validate student is a standard principal
     (asserts! (is-standard student) ERR-INVALID-PRINCIPAL)
     (match (map-get? whitelisted-beta { student: student }) whitelisted
@@ -129,10 +162,10 @@
   )
 )
 
-;; Owner removes user from whitelist
+;; Instructor removes user from whitelist
 (define-public (remove-whitelist (student principal)) 
   (begin
-    (asserts! (is-eq tx-sender UNI-OWNER) ERR-OWNER-ONLY)
+    (asserts! (is-instructor tx-sender) ERR-INSTRUCTOR-ONLY)
     ;; Validate student is a standard principal
     (asserts! (is-standard student) ERR-INVALID-PRINCIPAL)
     (match (map-get? whitelisted-beta { student: student }) whitelisted
@@ -158,23 +191,38 @@
 ;; Course Functions
 ;; =========================
 
-(define-public (add-course (name (string-ascii 100)) (details (string-ascii 256)) (instructor principal) (price uint) (max-students uint))
+;; Add or modify a course. If course-id is u0, creates new course. Otherwise updates existing course.
+(define-public (add-course (id uint) (name (string-ascii 100)) (details (string-ascii 256)) (instructor principal) (price uint) (max-students uint))
   (begin
-    (asserts! (is-eq tx-sender UNI-OWNER) ERR-OWNER-ONLY)
+    (asserts! (is-instructor tx-sender) ERR-INSTRUCTOR-ONLY)
     ;; Validate instructor is a standard principal
     (asserts! (is-standard instructor) ERR-INVALID-PRINCIPAL)
     ;; Validate name and details are not empty
     (asserts! (> (len name) u0) ERR-INVALID-AMOUNT)
     (asserts! (> (len details) u0) ERR-INVALID-AMOUNT)
     ;; Note: price and max-students can be 0 (free courses, unlimited enrollment)
-    (let ((new-course-id (+ (var-get course-id) u1)))
-      (var-set course-id new-course-id)
-      (map-set courses 
-        { course-id: new-course-id } 
-        { name: name, details: details, price: price, instructor: instructor, max-students: max-students }
+    
+    (if (is-eq id u0)
+      ;; Create new course
+      (let ((new-course-id (+ (var-get course-id) u1)))
+        (var-set course-id new-course-id)
+        (map-set courses 
+          { course-id: new-course-id } 
+          { name: name, details: details, price: price, instructor: instructor, max-students: max-students }
+        )
+        (print { event: "course-added", course-id: new-course-id, name: name, by: tx-sender })
+        (ok new-course-id)
       )
-      (print "{tx-sender} Added course {name} with id {new-course-id}")
-      (ok new-course-id)
+      ;; Update existing course
+      (begin
+        (asserts! (<= id (var-get course-id)) ERR-COURSE-NOT-FOUND)
+        (map-set courses 
+          { course-id: id } 
+          { name: name, details: details, price: price, instructor: instructor, max-students: max-students }
+        )
+        (print { event: "course-updated", course-id: id, name: name, by: tx-sender })
+        (ok id)
+      )
     )
   )
 )
@@ -185,6 +233,24 @@
 
 (define-read-only (get-course-count)
   (ok (var-get course-id))
+)
+
+;; Set or update meeting link for a course
+(define-public (set-meeting-link (id uint) (link (string-ascii 256)))
+  (begin
+    (asserts! (is-instructor tx-sender) ERR-INSTRUCTOR-ONLY)
+    (asserts! (> id u0) ERR-INVALID-AMOUNT)
+    (asserts! (<= id (var-get course-id)) ERR-COURSE-NOT-FOUND)
+    (asserts! (> (len link) u0) ERR-INVALID-AMOUNT)
+    (map-set meeting-links { course-id: id } { link: link })
+    (print { event: "meeting-link-set", course-id: id, by: tx-sender })
+    (ok true)
+  )
+)
+
+;; Get meeting link for a course
+(define-read-only (get-meeting-link (id uint))
+  (ok (map-get? meeting-links { course-id: id }))
 )
 
 (define-read-only (get-all-courses)
@@ -238,7 +304,7 @@
     (match enrollment enrollment-data
       (match course course-data
         (if (or (is-eq tx-sender (get instructor course-data))
-                (is-eq tx-sender UNI-OWNER))
+                (is-instructor tx-sender))
           (begin
             (asserts! (get paid enrollment-data) ERR-UNAUTHORIZED)
             (asserts! (get enrolled enrollment-data) ERR-UNAUTHORIZED)

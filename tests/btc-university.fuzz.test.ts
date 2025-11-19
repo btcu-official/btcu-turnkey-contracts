@@ -223,6 +223,7 @@ describe("Property-Based Fuzz Tests", () => {
                 "btc-university",
                 "add-course",
                 [
+                  Cl.uint(0),
                   Cl.stringAscii(course.name),
                   Cl.stringAscii(course.details),
                   Cl.principal(wallet1),
@@ -261,6 +262,7 @@ describe("Property-Based Fuzz Tests", () => {
               "btc-university",
               "add-course",
               [
+                Cl.uint(0),
                 Cl.stringAscii(name),
                 Cl.stringAscii(details),
                 Cl.principal(wallet1),
@@ -314,6 +316,7 @@ describe("Property-Based Fuzz Tests", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Test Course"),
           Cl.stringAscii("Test Description"),
           Cl.principal(wallet1),
@@ -428,6 +431,7 @@ describe("Boundary Value Fuzz Tests", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Test Course"),
           Cl.stringAscii("Test Details"),
           Cl.principal(wallet1),
@@ -456,6 +460,7 @@ describe("Boundary Value Fuzz Tests", () => {
             "btc-university",
             "add-course",
             [
+              Cl.uint(0),
               Cl.stringAscii(name),
               Cl.stringAscii(details),
               Cl.principal(wallet1),
@@ -509,10 +514,11 @@ describe("Boundary Value Fuzz Tests", () => {
     const maxStudentValues = [0, 1, 100, 1000, 10000, Number.MAX_SAFE_INTEGER];
 
     maxStudentValues.forEach((maxStudents, idx) => {
-      const { result } = simnet.callPublicFn(
+      const { result} = simnet.callPublicFn(
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii(`Course ${idx}`),
           Cl.stringAscii("Details"),
           Cl.principal(wallet1),
@@ -549,6 +555,7 @@ describe("Invariant Fuzz Tests", () => {
               "btc-university",
               "add-course",
               [
+                Cl.uint(0),
                 Cl.stringAscii(`Course ${op}`),
                 Cl.stringAscii("Details"),
                 Cl.principal(wallet1),
@@ -584,6 +591,7 @@ describe("Invariant Fuzz Tests", () => {
       "btc-university",
       "add-course",
       [
+        Cl.uint(0),
         Cl.stringAscii("Test Course"),
         Cl.stringAscii("Details"),
         Cl.principal(wallet1),
@@ -758,6 +766,7 @@ describe("Sequence-Based Fuzz Tests", () => {
                 "btc-university",
                 "add-course",
                 [
+                  Cl.uint(0),
                   Cl.stringAscii(`Course ${addedCount}`),
                   Cl.stringAscii("Details"),
                   Cl.principal(wallet1),
@@ -821,6 +830,7 @@ describe("Sequence-Based Fuzz Tests", () => {
                   "btc-university",
                   "add-course",
                   [
+                    Cl.uint(0),
                     Cl.stringAscii(`Course ${courseCount}`),
                     Cl.stringAscii("Details"),
                     Cl.principal(wallet1),
@@ -886,16 +896,17 @@ describe("Authorization Fuzz Tests", () => {
     initializeSbtcContract();
   });
 
-  it("FUZZ: Only owner can perform admin functions", () => {
+  it("FUZZ: Only instructors can perform admin functions", () => {
     fc.assert(
       fc.property(
         fc.constantFrom(wallet1, wallet2, wallet3, wallet4),
         (unauthorizedWallet) => {
-          // Try to add course as non-owner
+          // Try to add course as non-instructor
           const courseResult = simnet.callPublicFn(
             "btc-university",
             "add-course",
             [
+              Cl.uint(0),
               Cl.stringAscii("Unauthorized Course"),
               Cl.stringAscii("Should fail"),
               Cl.principal(wallet1),
@@ -920,12 +931,13 @@ describe("Authorization Fuzz Tests", () => {
     );
   });
 
-  it("FUZZ: Only instructor or owner can complete courses", () => {
+  it("FUZZ: Only instructor or course instructor can complete courses", () => {
     // Setup
     simnet.callPublicFn(
       "btc-university",
       "add-course",
       [
+        Cl.uint(0),
         Cl.stringAscii("Test Course"),
         Cl.stringAscii("Details"),
         Cl.principal(wallet1),

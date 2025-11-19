@@ -286,11 +286,12 @@ describe("Whitelist Functions", () => {
 
 describe("Course Functions", () => {
   describe("add-course", () => {
-    it("allows owner to add a course", () => {
+    it("allows instructor to add a course", () => {
       const { result } = simnet.callPublicFn(
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Introduction to Bitcoin"),
           Cl.stringAscii("Learn the basics of Bitcoin and blockchain technology"),
           Cl.principal(wallet1),
@@ -302,11 +303,12 @@ describe("Course Functions", () => {
       expect(result).toBeOk(Cl.uint(1));
     });
 
-    it("prevents non-owner from adding courses", () => {
+    it("prevents non-instructor from adding courses", () => {
       const { result } = simnet.callPublicFn(
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Unauthorized Course"),
           Cl.stringAscii("This should fail"),
           Cl.principal(wallet2),
@@ -315,7 +317,7 @@ describe("Course Functions", () => {
         ],
         wallet1
       );
-      expect(result).toBeErr(Cl.uint(100)); // ERR-OWNER-ONLY
+      expect(result).toBeErr(Cl.uint(100)); // ERR-INSTRUCTOR-ONLY
     });
 
     it("increments course ID correctly for multiple courses", () => {
@@ -323,6 +325,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Course 1"),
           Cl.stringAscii("First course"),
           Cl.principal(wallet1),
@@ -337,6 +340,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Course 2"),
           Cl.stringAscii("Second course"),
           Cl.principal(wallet2),
@@ -351,6 +355,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Course 3"),
           Cl.stringAscii("Third course"),
           Cl.principal(wallet3),
@@ -370,6 +375,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii(maxName),
           Cl.stringAscii(maxDetails),
           Cl.principal(wallet1),
@@ -386,6 +392,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Free Course"),
           Cl.stringAscii("No price or limit"),
           Cl.principal(wallet1),
@@ -405,6 +412,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Test Course"),
           Cl.stringAscii("Test Description"),
           Cl.principal(wallet1),
@@ -501,6 +509,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Course 1"),
           Cl.stringAscii("Details 1"),
           Cl.principal(wallet1),
@@ -522,6 +531,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Course 2"),
           Cl.stringAscii("Details 2"),
           Cl.principal(wallet2),
@@ -545,6 +555,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Course"),
           Cl.stringAscii("Details"),
           Cl.principal(wallet1),
@@ -613,6 +624,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Course 1"),
           Cl.stringAscii("Details 1"),
           Cl.principal(wallet1),
@@ -627,6 +639,7 @@ describe("Course Functions", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Course 2"),
           Cl.stringAscii("Details 2"),
           Cl.principal(wallet2),
@@ -666,6 +679,7 @@ describe("Enrollment Functions", () => {
       "btc-university",
       "add-course",
       [
+        Cl.uint(0),
         Cl.stringAscii("Test Course"),
         Cl.stringAscii("Test Description"),
         Cl.principal(wallet1),
@@ -993,12 +1007,13 @@ describe("Edge Cases and Security", () => {
   });
 
   describe("Authorization Edge Cases", () => {
-    it("deployer is the owner and has special privileges", () => {
-      // Owner can add courses
+    it("deployer is the instructor and has special privileges", () => {
+      // Deployer can add courses
       const result1 = simnet.callPublicFn(
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Owner Course"),
           Cl.stringAscii("Owner can add this"),
           Cl.principal(wallet1),
@@ -1009,7 +1024,7 @@ describe("Edge Cases and Security", () => {
       );
       expect(result1.result).toBeOk(Cl.uint(1));
 
-      // Owner can add to whitelist
+      // Deployer can add to whitelist
       const result2 = simnet.callPublicFn(
         "btc-university",
         "add-whitelist",
@@ -1019,11 +1034,12 @@ describe("Edge Cases and Security", () => {
       expect(result2.result).toBeOk(Cl.bool(true));
     });
 
-    it("non-owner cannot perform owner-only operations", () => {
+    it("non-instructor cannot perform instructor-only operations", () => {
       const result1 = simnet.callPublicFn(
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Unauthorized"),
           Cl.stringAscii("Should fail"),
           Cl.principal(wallet1),
@@ -1058,6 +1074,7 @@ describe("Edge Cases and Security", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Course 1"),
           Cl.stringAscii("Details"),
           Cl.principal(wallet1),
@@ -1079,6 +1096,7 @@ describe("Edge Cases and Security", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Course 2"),
           Cl.stringAscii("Details"),
           Cl.principal(wallet2),
@@ -1150,6 +1168,7 @@ describe("Edge Cases and Security", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Expensive Course"),
           Cl.stringAscii("Max price"),
           Cl.principal(wallet1),
@@ -1166,6 +1185,7 @@ describe("Edge Cases and Security", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("A"),
           Cl.stringAscii("B"),
           Cl.principal(wallet1),
@@ -1185,6 +1205,7 @@ describe("Edge Cases and Security", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Bitcoin 101"),
           Cl.stringAscii("Intro to Bitcoin"),
           Cl.principal(wallet1),
@@ -1198,6 +1219,7 @@ describe("Edge Cases and Security", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Advanced Stacks"),
           Cl.stringAscii("Deep dive into Stacks"),
           Cl.principal(wallet2),
@@ -1287,11 +1309,12 @@ describe("Edge Cases and Security", () => {
       );
       expect(whitelistResult.result).toBeOk(Cl.bool(true));
 
-      // 3. Owner creates a course
+      // 3. Deployer creates a course
       const courseResult = simnet.callPublicFn(
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Bitcoin Fundamentals"),
           Cl.stringAscii("Learn Bitcoin basics"),
           Cl.principal(wallet2),
@@ -1345,6 +1368,7 @@ describe("Edge Cases and Security", () => {
         "btc-university",
         "add-course",
         [
+          Cl.uint(0),
           Cl.stringAscii("Advanced Stacks"),
           Cl.stringAscii("Deep dive"),
           Cl.principal(wallet1),
@@ -1386,6 +1410,421 @@ describe("Edge Cases and Security", () => {
         wallet1
       );
       expect(claimResult.result).toBeOk(Cl.uint(9000000));
+    });
+  });
+});
+
+// ==============================
+// NEW FEATURES TESTS
+// ==============================
+
+describe("Instructor Management", () => {
+  describe("add-instructor", () => {
+    it("allows deployer to add new instructor", () => {
+      const { result } = simnet.callPublicFn(
+        "btc-university",
+        "add-instructor",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(result).toBeOk(Cl.bool(true));
+    });
+
+    it("allows existing instructor to add new instructor", () => {
+      // First, deployer adds wallet1 as instructor
+      simnet.callPublicFn(
+        "btc-university",
+        "add-instructor",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+
+      // Now wallet1 can add wallet2 as instructor
+      const { result } = simnet.callPublicFn(
+        "btc-university",
+        "add-instructor",
+        [Cl.principal(wallet2)],
+        wallet1
+      );
+      expect(result).toBeOk(Cl.bool(true));
+    });
+
+    it("prevents non-instructor from adding instructor", () => {
+      const { result } = simnet.callPublicFn(
+        "btc-university",
+        "add-instructor",
+        [Cl.principal(wallet2)],
+        wallet1
+      );
+      expect(result).toBeErr(Cl.uint(100)); // ERR-INSTRUCTOR-ONLY
+    });
+  });
+
+  describe("is-instructor", () => {
+    it("returns true for deployer", () => {
+      const { result } = simnet.callReadOnlyFn(
+        "btc-university",
+        "is-instructor",
+        [Cl.principal(deployer)],
+        wallet1
+      );
+      expect(result).toBeBool(true);
+    });
+
+    it("returns false for non-instructor", () => {
+      const { result } = simnet.callReadOnlyFn(
+        "btc-university",
+        "is-instructor",
+        [Cl.principal(wallet1)],
+        wallet2
+      );
+      expect(result).toBeBool(false);
+    });
+
+    it("returns true for added instructor", () => {
+      // Add wallet1 as instructor
+      simnet.callPublicFn(
+        "btc-university",
+        "add-instructor",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+
+      const { result } = simnet.callReadOnlyFn(
+        "btc-university",
+        "is-instructor",
+        [Cl.principal(wallet1)],
+        wallet2
+      );
+      expect(result).toBeBool(true);
+    });
+  });
+
+  describe("instructor can perform privileged operations", () => {
+    beforeEach(() => {
+      // Add wallet1 as instructor
+      simnet.callPublicFn(
+        "btc-university",
+        "add-instructor",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+    });
+
+    it("instructor can add courses", () => {
+      const { result } = simnet.callPublicFn(
+        "btc-university",
+        "add-course",
+        [
+          Cl.uint(0),
+          Cl.stringAscii("Instructor Course"),
+          Cl.stringAscii("Added by instructor"),
+          Cl.principal(wallet2),
+          Cl.uint(1000000),
+          Cl.uint(50),
+        ],
+        wallet1
+      );
+      expect(result).toBeOk(Cl.uint(1));
+    });
+
+    it("instructor can add to whitelist", () => {
+      const { result } = simnet.callPublicFn(
+        "btc-university",
+        "add-whitelist",
+        [Cl.principal(wallet2)],
+        wallet1
+      );
+      expect(result).toBeOk(Cl.bool(true));
+    });
+  });
+});
+
+describe("Course Modification", () => {
+  beforeEach(() => {
+    // Add initial course
+    simnet.callPublicFn(
+      "btc-university",
+      "add-course",
+      [
+        Cl.uint(0),
+        Cl.stringAscii("Original Course"),
+        Cl.stringAscii("Original Details"),
+        Cl.principal(wallet1),
+        Cl.uint(1000000),
+        Cl.uint(50),
+      ],
+      deployer
+    );
+  });
+
+  it("allows instructor to modify existing course", () => {
+    const { result } = simnet.callPublicFn(
+      "btc-university",
+      "add-course",
+      [
+        Cl.uint(1),
+        Cl.stringAscii("Modified Course"),
+        Cl.stringAscii("Modified Details"),
+        Cl.principal(wallet2),
+        Cl.uint(2000000),
+        Cl.uint(100),
+      ],
+      deployer
+    );
+    expect(result).toBeOk(Cl.uint(1)); // Returns same ID
+
+    // Verify the course was modified
+    const courseDetails = simnet.callReadOnlyFn(
+      "btc-university",
+      "get-course-details",
+      [Cl.uint(1)],
+      wallet1
+    );
+    expect(courseDetails.result).toBeOk(
+      Cl.tuple({
+        name: Cl.stringAscii("Modified Course"),
+        details: Cl.stringAscii("Modified Details"),
+        instructor: Cl.principal(wallet2),
+        price: Cl.uint(2000000),
+        "max-students": Cl.uint(100),
+      })
+    );
+  });
+
+  it("returns error when modifying non-existent course", () => {
+    const { result } = simnet.callPublicFn(
+      "btc-university",
+      "add-course",
+      [
+        Cl.uint(999),
+        Cl.stringAscii("Non-existent"),
+        Cl.stringAscii("Should fail"),
+        Cl.principal(wallet1),
+        Cl.uint(1000000),
+        Cl.uint(50),
+      ],
+      deployer
+    );
+    expect(result).toBeErr(Cl.uint(101)); // ERR-COURSE-NOT-FOUND
+  });
+
+  it("course count does not increase when modifying", () => {
+    const countBefore = simnet.callReadOnlyFn(
+      "btc-university",
+      "get-course-count",
+      [],
+      wallet1
+    );
+    expect(countBefore.result).toBeOk(Cl.uint(1));
+
+    // Modify course 1
+    simnet.callPublicFn(
+      "btc-university",
+      "add-course",
+      [
+        Cl.uint(1),
+        Cl.stringAscii("Modified"),
+        Cl.stringAscii("Modified Details"),
+        Cl.principal(wallet1),
+        Cl.uint(1000000),
+        Cl.uint(50),
+      ],
+      deployer
+    );
+
+    const countAfter = simnet.callReadOnlyFn(
+      "btc-university",
+      "get-course-count",
+      [],
+      wallet1
+    );
+    expect(countAfter.result).toBeOk(Cl.uint(1)); // Still 1
+  });
+});
+
+describe("Meeting Link Management", () => {
+  beforeEach(() => {
+    // Add a course
+    simnet.callPublicFn(
+      "btc-university",
+      "add-course",
+      [
+        Cl.uint(0),
+        Cl.stringAscii("Test Course"),
+        Cl.stringAscii("Test Description"),
+        Cl.principal(wallet1),
+        Cl.uint(1000000),
+        Cl.uint(50),
+      ],
+      deployer
+    );
+  });
+
+  describe("set-meeting-link", () => {
+    it("allows instructor to set meeting link", () => {
+      const { result } = simnet.callPublicFn(
+        "btc-university",
+        "set-meeting-link",
+        [Cl.uint(1), Cl.stringAscii("https://zoom.us/j/123456789")],
+        deployer
+      );
+      expect(result).toBeOk(Cl.bool(true));
+    });
+
+    it("allows instructor to update meeting link", () => {
+      // Set initial link
+      simnet.callPublicFn(
+        "btc-university",
+        "set-meeting-link",
+        [Cl.uint(1), Cl.stringAscii("https://zoom.us/j/111111111")],
+        deployer
+      );
+
+      // Update link
+      const { result } = simnet.callPublicFn(
+        "btc-university",
+        "set-meeting-link",
+        [Cl.uint(1), Cl.stringAscii("https://meet.google.com/abc-defg-hij")],
+        deployer
+      );
+      expect(result).toBeOk(Cl.bool(true));
+
+      // Verify updated link
+      const linkResult = simnet.callReadOnlyFn(
+        "btc-university",
+        "get-meeting-link",
+        [Cl.uint(1)],
+        wallet1
+      );
+      expect(linkResult.result).toBeOk(
+        Cl.some(
+          Cl.tuple({
+            link: Cl.stringAscii("https://meet.google.com/abc-defg-hij"),
+          })
+        )
+      );
+    });
+
+    it("prevents non-instructor from setting meeting link", () => {
+      const { result } = simnet.callPublicFn(
+        "btc-university",
+        "set-meeting-link",
+        [Cl.uint(1), Cl.stringAscii("https://zoom.us/j/123456789")],
+        wallet1
+      );
+      expect(result).toBeErr(Cl.uint(100)); // ERR-INSTRUCTOR-ONLY
+    });
+
+    it("returns error for non-existent course", () => {
+      const { result } = simnet.callPublicFn(
+        "btc-university",
+        "set-meeting-link",
+        [Cl.uint(999), Cl.stringAscii("https://zoom.us/j/123456789")],
+        deployer
+      );
+      expect(result).toBeErr(Cl.uint(101)); // ERR-COURSE-NOT-FOUND
+    });
+
+    it("allows added instructor to set meeting link", () => {
+      // Add wallet1 as instructor
+      simnet.callPublicFn(
+        "btc-university",
+        "add-instructor",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+
+      const { result } = simnet.callPublicFn(
+        "btc-university",
+        "set-meeting-link",
+        [Cl.uint(1), Cl.stringAscii("https://teams.microsoft.com/meeting")],
+        wallet1
+      );
+      expect(result).toBeOk(Cl.bool(true));
+    });
+  });
+
+  describe("get-meeting-link", () => {
+    it("returns none when no meeting link is set", () => {
+      const { result } = simnet.callReadOnlyFn(
+        "btc-university",
+        "get-meeting-link",
+        [Cl.uint(1)],
+        wallet1
+      );
+      expect(result).toBeOk(Cl.none());
+    });
+
+    it("returns meeting link when set", () => {
+      // Set meeting link
+      simnet.callPublicFn(
+        "btc-university",
+        "set-meeting-link",
+        [Cl.uint(1), Cl.stringAscii("https://zoom.us/j/987654321")],
+        deployer
+      );
+
+      const { result } = simnet.callReadOnlyFn(
+        "btc-university",
+        "get-meeting-link",
+        [Cl.uint(1)],
+        wallet1
+      );
+      expect(result).toBeOk(
+        Cl.some(
+          Cl.tuple({
+            link: Cl.stringAscii("https://zoom.us/j/987654321"),
+          })
+        )
+      );
+    });
+
+    it("can be called by any address", () => {
+      simnet.callPublicFn(
+        "btc-university",
+        "set-meeting-link",
+        [Cl.uint(1), Cl.stringAscii("https://zoom.us/j/555555555")],
+        deployer
+      );
+
+      const result1 = simnet.callReadOnlyFn(
+        "btc-university",
+        "get-meeting-link",
+        [Cl.uint(1)],
+        wallet1
+      );
+      expect(result1.result).toBeOk(
+        Cl.some(
+          Cl.tuple({
+            link: Cl.stringAscii("https://zoom.us/j/555555555"),
+          })
+        )
+      );
+
+      const result2 = simnet.callReadOnlyFn(
+        "btc-university",
+        "get-meeting-link",
+        [Cl.uint(1)],
+        wallet2
+      );
+      expect(result2.result).toBeOk(
+        Cl.some(
+          Cl.tuple({
+            link: Cl.stringAscii("https://zoom.us/j/555555555"),
+          })
+        )
+      );
+    });
+
+    it("returns none for non-existent course", () => {
+      const { result } = simnet.callReadOnlyFn(
+        "btc-university",
+        "get-meeting-link",
+        [Cl.uint(999)],
+        wallet1
+      );
+      expect(result).toBeOk(Cl.none());
     });
   });
 });
