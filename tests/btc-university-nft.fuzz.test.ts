@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Cl } from "@stacks/transactions";
 import * as fc from "fast-check";
 
@@ -20,15 +20,21 @@ describe("NFT Property-Based Fuzz Tests", () => {
         fc.property(
           fc.array(fc.constantFrom(wallet1, wallet2, wallet3, wallet4), {
             minLength: 1,
-            maxLength: 20,
+            maxLength: 4, // Max 4 since only 4 unique wallets
           }),
           (recipients) => {
             const tokenIds = new Set<string>();
+            const mintedStudents = new Set<string>();
 
             for (const recipient of recipients) {
+              // Skip if already minted for this student (one NFT per student)
+              if (mintedStudents.has(recipient)) {
+                continue;
+              }
+
               const { result } = simnet.callPublicFn(
                 "btc-university-nft",
-                "mint",
+                "mint-for-student",
                 [Cl.principal(recipient)],
                 deployer
               );
@@ -38,6 +44,7 @@ describe("NFT Property-Based Fuzz Tests", () => {
                 // Each token ID should be unique
                 expect(tokenIds.has(tokenId)).toBe(false);
                 tokenIds.add(tokenId);
+                mintedStudents.add(recipient);
               }
             }
           }
@@ -48,7 +55,7 @@ describe("NFT Property-Based Fuzz Tests", () => {
 
     it("PROPERTY: Token IDs increment sequentially", () => {
       fc.assert(
-        fc.property(fc.integer({ min: 1, max: 50 }), (numMints) => {
+        fc.property(fc.integer({ min: 1, max: 4 }), (numMints) => {
           // Get the starting token ID (state may persist from previous tests)
           const initialIdResult = simnet.callReadOnlyFn(
             "btc-university-nft",
@@ -61,17 +68,36 @@ describe("NFT Property-Based Fuzz Tests", () => {
               ? Number((initialIdResult.result as any).value.value)
               : 0;
 
-          for (let i = 1; i <= numMints; i++) {
-            const { result } = simnet.callPublicFn(
+          // Use different wallets for each mint (one NFT per student)
+          const wallets = [wallet1, wallet2, wallet3, wallet4];
+          let actualMints = 0;
+          
+          for (let i = 0; i < numMints && i < wallets.length; i++) {
+            // Check if this wallet already has an NFT
+            const hasNft = simnet.callReadOnlyFn(
               "btc-university-nft",
-              "mint",
-              [Cl.principal(wallet1)],
+              "has-nft",
+              [Cl.principal(wallets[i])],
               deployer
             );
+            
+            const alreadyMinted = hasNft.result.type === "ok" && 
+              hasNft.result.value.type === Cl.bool(true).type &&
+              JSON.stringify(hasNft.result.value) === JSON.stringify(Cl.bool(true));
+            
+            if (!alreadyMinted) {
+              const { result } = simnet.callPublicFn(
+                "btc-university-nft",
+                "mint-for-student",
+                [Cl.principal(wallets[i])],
+                deployer
+              );
 
-            if (result.type === "ok") {
-              const tokenId = Number((result as any).value.value);
-              expect(tokenId).toBe(startingId + i);
+              if (result.type === "ok") {
+                actualMints++;
+                const tokenId = Number((result as any).value.value);
+                expect(tokenId).toBe(startingId + actualMints);
+              }
             }
           }
         }),
@@ -84,22 +110,30 @@ describe("NFT Property-Based Fuzz Tests", () => {
         fc.property(
           fc.array(fc.constantFrom(wallet1, wallet2, wallet3, wallet4), {
             minLength: 1,
-            maxLength: 10,
+            maxLength: 4,
           }),
           (recipients) => {
+            const mintedStudents = new Set<string>();
+
             for (let i = 0; i < recipients.length; i++) {
               const recipient = recipients[i];
+
+              // Skip if already minted for this student
+              if (mintedStudents.has(recipient)) {
+                continue;
+              }
 
               // Mint NFT
               const mintResult = simnet.callPublicFn(
                 "btc-university-nft",
-                "mint",
+                "mint-for-student",
                 [Cl.principal(recipient)],
                 deployer
               );
 
               if (mintResult.result.type === "ok") {
                 const tokenId = Number((mintResult.result as any).value.value);
+                mintedStudents.add(recipient);
 
                 // Check owner
                 const ownerResult = simnet.callReadOnlyFn(
@@ -123,9 +157,9 @@ describe("NFT Property-Based Fuzz Tests", () => {
       );
     });
 
-    it("PROPERTY: last-token-id increases by number of mints", () => {
+    it("PROPERTY: last-token-id increases by number of unique students minted", () => {
       fc.assert(
-        fc.property(fc.integer({ min: 1, max: 30 }), (numMints) => {
+        fc.property(fc.integer({ min: 1, max: 4 }), (numMints) => {
           // Get initial token ID
           const initialResult = simnet.callReadOnlyFn(
             "btc-university-nft",
@@ -138,14 +172,35 @@ describe("NFT Property-Based Fuzz Tests", () => {
               ? Number((initialResult.result as any).value.value)
               : 0;
 
-          // Mint tokens
-          for (let i = 0; i < numMints; i++) {
-            simnet.callPublicFn(
+          // Mint tokens to different students (one NFT per student)
+          const wallets = [wallet1, wallet2, wallet3, wallet4];
+          let successfulMints = 0;
+          
+          for (let i = 0; i < numMints && i < wallets.length; i++) {
+            // Check if wallet already has an NFT
+            const hasNft = simnet.callReadOnlyFn(
               "btc-university-nft",
-              "mint",
-              [Cl.principal(wallet1)],
+              "has-nft",
+              [Cl.principal(wallets[i])],
               deployer
             );
+            
+            const alreadyMinted = hasNft.result.type === "ok" && 
+              hasNft.result.value.type === Cl.bool(true).type &&
+              JSON.stringify(hasNft.result.value) === JSON.stringify(Cl.bool(true));
+            
+            if (!alreadyMinted) {
+              const result = simnet.callPublicFn(
+                "btc-university-nft",
+                "mint-for-student",
+                [Cl.principal(wallets[i])],
+                deployer
+              );
+              
+              if (result.result.type === "ok") {
+                successfulMints++;
+              }
+            }
           }
 
           // Get final token ID
@@ -158,8 +213,8 @@ describe("NFT Property-Based Fuzz Tests", () => {
 
           expect(result.type).toBe("ok");
           const finalId = Number((result as any).value.value);
-          // Final ID should equal initial ID + number of mints
-          expect(finalId).toBe(initialId + numMints);
+          // Final ID should equal initial ID + number of successful mints
+          expect(finalId).toBe(initialId + successfulMints);
         }),
         { numRuns: 10 }
       );
@@ -167,7 +222,7 @@ describe("NFT Property-Based Fuzz Tests", () => {
   });
 
   describe("Authorization Properties", () => {
-    it("PROPERTY: Only deployer can mint", () => {
+    it("PROPERTY: Only instructors can mint", () => {
       fc.assert(
         fc.property(
           fc.constantFrom(wallet1, wallet2, wallet3, wallet4),
@@ -175,15 +230,15 @@ describe("NFT Property-Based Fuzz Tests", () => {
           (caller, recipient) => {
             const { result } = simnet.callPublicFn(
               "btc-university-nft",
-              "mint",
+              "mint-for-student",
               [Cl.principal(recipient)],
               caller
             );
 
-            // Should always fail for non-deployer
+            // Should always fail for non-instructor
             expect(result.type).toBe("err");
             if (result.type === "err") {
-              expect((result as any).value.value).toBe(100n); // err-owner-only
+              expect((result as any).value.value).toBe(100n); // ERR-INSTRUCTOR-ONLY
             }
           }
         ),
@@ -191,19 +246,50 @@ describe("NFT Property-Based Fuzz Tests", () => {
       );
     });
 
-    it("PROPERTY: Deployer can always mint successfully", () => {
+    it("PROPERTY: Deployer (default instructor) can mint successfully to unique students", () => {
       fc.assert(
         fc.property(
           fc.constantFrom(wallet1, wallet2, wallet3, wallet4),
           (recipient) => {
-            const { result } = simnet.callPublicFn(
+            // Check if student already has NFT BEFORE minting
+            const hasNftBefore = simnet.callReadOnlyFn(
               "btc-university-nft",
-              "mint",
+              "has-nft",
               [Cl.principal(recipient)],
               deployer
             );
 
-            expect(result.type).toBe("ok");
+            const alreadyMinted = hasNftBefore.result.type === "ok" && 
+              hasNftBefore.result.value.type === Cl.bool(true).type &&
+              JSON.stringify(hasNftBefore.result.value) === JSON.stringify(Cl.bool(true));
+
+            const { result } = simnet.callPublicFn(
+              "btc-university-nft",
+              "mint-for-student",
+              [Cl.principal(recipient)],
+              deployer
+            );
+
+            if (alreadyMinted) {
+              // Should fail with ERR-ALREADY-MINTED
+              expect(result.type).toBe("err");
+              if (result.type === "err") {
+                expect((result as any).value.value).toBe(103n); // ERR-ALREADY-MINTED
+              }
+            } else {
+              // Should succeed
+              expect(result.type).toBe("ok");
+              
+              // Verify has-nft now returns true
+              const hasNftAfter = simnet.callReadOnlyFn(
+                "btc-university-nft",
+                "has-nft",
+                [Cl.principal(recipient)],
+                deployer
+              );
+              expect(hasNftAfter.result.type).toBe("ok");
+              expect(JSON.stringify((hasNftAfter.result as any).value)).toBe(JSON.stringify(Cl.bool(true)));
+            }
           }
         ),
         { numRuns: 20 }
@@ -230,16 +316,7 @@ describe("NFT Property-Based Fuzz Tests", () => {
     });
 
     it("PROPERTY: get-owner returns none for unminted tokens", () => {
-      // Mint a few tokens first
-      for (let i = 0; i < 5; i++) {
-        simnet.callPublicFn(
-          "btc-university-nft",
-          "mint",
-          [Cl.principal(wallet1)],
-          deployer
-        );
-      }
-
+      // Query high token IDs that are unlikely to be minted
       fc.assert(
         fc.property(fc.integer({ min: 100, max: 1000 }), (unmintedId) => {
           const { result } = simnet.callReadOnlyFn(
@@ -261,15 +338,21 @@ describe("NFT Property-Based Fuzz Tests", () => {
         fc.property(
           fc.array(fc.constantFrom(wallet1, wallet2, wallet3), {
             minLength: 1,
-            maxLength: 10,
+            maxLength: 3,
           }),
           (recipients) => {
-            // Mint NFTs
+            // Mint NFTs (one per unique student)
             const mints: Array<{ tokenId: number; recipient: string }> = [];
+            const mintedStudents = new Set<string>();
+
             for (const recipient of recipients) {
+              if (mintedStudents.has(recipient)) {
+                continue;
+              }
+
               const { result } = simnet.callPublicFn(
                 "btc-university-nft",
-                "mint",
+                "mint-for-student",
                 [Cl.principal(recipient)],
                 deployer
               );
@@ -279,6 +362,7 @@ describe("NFT Property-Based Fuzz Tests", () => {
                   tokenId: Number((result as any).value.value),
                   recipient,
                 });
+                mintedStudents.add(recipient);
               }
             }
 
@@ -308,12 +392,13 @@ describe("NFT Property-Based Fuzz Tests", () => {
 
 describe("NFT Boundary Value Fuzz Tests", () => {
   it("FUZZ: Extreme token ID queries", () => {
-    // Mint a few tokens
-    for (let i = 0; i < 3; i++) {
+    // Mint a few tokens to different students
+    const wallets = [wallet1, wallet2, wallet3];
+    for (let i = 0; i < wallets.length; i++) {
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
-        [Cl.principal(wallet1)],
+        "mint-for-student",
+        [Cl.principal(wallets[i])],
         deployer
       );
     }
@@ -351,24 +436,35 @@ describe("NFT Boundary Value Fuzz Tests", () => {
     });
   });
 
-  it("FUZZ: Large number of sequential mints", () => {
-    const largeNumber = 100;
+  it("FUZZ: Multiple attempts to mint to same recipient", () => {
+    // First mint succeeds
+    const result1 = simnet.callPublicFn(
+      "btc-university-nft",
+      "mint-for-student",
+      [Cl.principal(wallet1)],
+      deployer
+    );
+    expect(result1.result.type).toBe("ok");
+    if (result1.result.type === "ok") {
+      expect(Number((result1.result as any).value.value)).toBe(1);
+    }
 
-    for (let i = 0; i < largeNumber; i++) {
+    // All subsequent mints to same recipient fail
+    for (let i = 2; i <= 10; i++) {
       const { result } = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
 
-      expect(result.type).toBe("ok");
-      if (result.type === "ok") {
-        expect(Number((result as any).value.value)).toBe(i + 1);
+      expect(result.type).toBe("err");
+      if (result.type === "err") {
+        expect((result as any).value.value).toBe(103n); // ERR-ALREADY-MINTED
       }
     }
 
-    // Verify last token ID
+    // Verify last token ID is still 1 (only one successful mint)
     const { result } = simnet.callReadOnlyFn(
       "btc-university-nft",
       "get-last-token-id",
@@ -377,46 +473,62 @@ describe("NFT Boundary Value Fuzz Tests", () => {
     );
 
     expect(result.type).toBe("ok");
-    expect(Number((result as any).value.value)).toBe(largeNumber);
+    expect(Number((result as any).value.value)).toBe(1);
   });
 
-  it("FUZZ: Mint to same recipient multiple times", () => {
+  it("FUZZ: Verify one NFT per student constraint", () => {
     fc.assert(
-      fc.property(fc.integer({ min: 1, max: 20 }), (numMints) => {
-        const tokenIds: number[] = [];
+      fc.property(fc.integer({ min: 2, max: 10 }), (numAttempts) => {
+        // Check if wallet1 already has an NFT from previous tests
+        const hasNftInitial = simnet.callReadOnlyFn(
+          "btc-university-nft",
+          "has-nft",
+          [Cl.principal(wallet1)],
+          wallet1
+        );
+        const alreadyHadNft = hasNftInitial.result.type === "ok" && 
+          hasNftInitial.result.value.type === Cl.bool(true).type &&
+          JSON.stringify(hasNftInitial.result.value) === JSON.stringify(Cl.bool(true));
 
-        for (let i = 0; i < numMints; i++) {
+        let successfulMints = 0;
+        let failedMints = 0;
+
+        for (let i = 0; i < numAttempts; i++) {
           const { result } = simnet.callPublicFn(
             "btc-university-nft",
-            "mint",
+            "mint-for-student",
             [Cl.principal(wallet1)],
             deployer
           );
 
           if (result.type === "ok") {
-            tokenIds.push(Number((result as any).value.value));
+            successfulMints++;
+          } else if (result.type === "err") {
+            failedMints++;
+            // Should fail with ERR-ALREADY-MINTED
+            expect((result as any).value.value).toBe(103n);
           }
         }
 
-        // Verify all token IDs are unique
-        const uniqueIds = new Set(tokenIds);
-        expect(uniqueIds.size).toBe(tokenIds.length);
-
-        // Verify all belong to wallet1
-        for (const tokenId of tokenIds) {
-          const { result } = simnet.callReadOnlyFn(
-            "btc-university-nft",
-            "get-owner",
-            [Cl.uint(tokenId)],
-            wallet1
-          );
-
-          expect(result.type).toBe("ok");
-          const owner = (result as any).value;
-          if (owner.type === "some") {
-            expect(owner.value.value).toBe(wallet1);
-          }
+        if (alreadyHadNft) {
+          // All mints should fail if already minted
+          expect(successfulMints).toBe(0);
+          expect(failedMints).toBe(numAttempts);
+        } else {
+          // Only first mint should succeed
+          expect(successfulMints).toBe(1);
+          expect(failedMints).toBe(numAttempts - 1);
         }
+
+        // Verify wallet1 owns exactly one NFT
+        const hasNft = simnet.callReadOnlyFn(
+          "btc-university-nft",
+          "has-nft",
+          [Cl.principal(wallet1)],
+          wallet1
+        );
+        expect(hasNft.result.type).toBe("ok");
+        expect(JSON.stringify((hasNft.result as any).value)).toBe(JSON.stringify(Cl.bool(true)));
       }),
       { numRuns: 10 }
     );
@@ -432,19 +544,24 @@ describe("NFT Invariant Fuzz Tests", () => {
     fc.assert(
       fc.property(
         fc.array(fc.constantFrom(wallet1, wallet2, wallet3), {
-          minLength: 5,
-          maxLength: 20,
+          minLength: 3,
+          maxLength: 6,
         }),
         (recipients) => {
           let previousId = 0;
+          const mintedStudents = new Set<string>();
 
           for (const recipient of recipients) {
-            simnet.callPublicFn(
-              "btc-university-nft",
-              "mint",
-              [Cl.principal(recipient)],
-              deployer
-            );
+            // Skip if already minted for this student
+            if (!mintedStudents.has(recipient)) {
+              simnet.callPublicFn(
+                "btc-university-nft",
+                "mint-for-student",
+                [Cl.principal(recipient)],
+                deployer
+              );
+              mintedStudents.add(recipient);
+            }
 
             const { result } = simnet.callReadOnlyFn(
               "btc-university-nft",
@@ -465,16 +582,17 @@ describe("NFT Invariant Fuzz Tests", () => {
     );
   });
 
-  it("INVARIANT: Token IDs are consecutive integers", () => {
+  it("INVARIANT: Token IDs are consecutive integers for unique students", () => {
     fc.assert(
-      fc.property(fc.integer({ min: 5, max: 30 }), (numMints) => {
+      fc.property(fc.integer({ min: 2, max: 4 }), (numMints) => {
         const tokenIds: number[] = [];
+        const wallets = [wallet1, wallet2, wallet3, wallet4];
 
-        for (let i = 0; i < numMints; i++) {
+        for (let i = 0; i < numMints && i < wallets.length; i++) {
           const { result } = simnet.callPublicFn(
             "btc-university-nft",
-            "mint",
-            [Cl.principal(wallet1)],
+            "mint-for-student",
+            [Cl.principal(wallets[i])],
             deployer
           );
 
@@ -497,19 +615,27 @@ describe("NFT Invariant Fuzz Tests", () => {
       fc.property(
         fc.array(fc.constantFrom(wallet1, wallet2, wallet3, wallet4), {
           minLength: 1,
-          maxLength: 15,
+          maxLength: 4,
         }),
         (recipients) => {
+          const mintedStudents = new Set<string>();
+
           for (let i = 0; i < recipients.length; i++) {
+            // Skip if already minted for this student
+            if (mintedStudents.has(recipients[i])) {
+              continue;
+            }
+
             const mintResult = simnet.callPublicFn(
               "btc-university-nft",
-              "mint",
+              "mint-for-student",
               [Cl.principal(recipients[i])],
               deployer
             );
 
             if (mintResult.result.type === "ok") {
               const tokenId = Number((mintResult.result as any).value.value);
+              mintedStudents.add(recipients[i]);
 
               // Check from multiple callers - should always return same owner
               const owner1 = simnet.callReadOnlyFn(
@@ -541,12 +667,12 @@ describe("NFT Invariant Fuzz Tests", () => {
     );
   });
 
-  it("INVARIANT: Minting increases last-token-id by exactly 1", () => {
+  it("INVARIANT: Minting increases last-token-id by exactly 1 per unique student", () => {
     fc.assert(
       fc.property(
         fc.array(fc.constantFrom(wallet1, wallet2, wallet3), {
           minLength: 1,
-          maxLength: 25,
+          maxLength: 6,
         }),
         (recipients) => {
           // Get initial last-token-id
@@ -562,17 +688,24 @@ describe("NFT Invariant Fuzz Tests", () => {
               : 0;
 
           let successfulMints = 0;
+          const mintedStudents = new Set<string>();
 
           for (const recipient of recipients) {
+            // Skip if already minted for this student
+            if (mintedStudents.has(recipient)) {
+              continue;
+            }
+
             const { result } = simnet.callPublicFn(
               "btc-university-nft",
-              "mint",
+              "mint-for-student",
               [Cl.principal(recipient)],
               deployer
             );
 
             if (result.type === "ok") {
               successfulMints++;
+              mintedStudents.add(recipient);
             }
           }
 
@@ -609,7 +742,8 @@ describe("NFT Sequence-Based Fuzz Tests", () => {
               "mint",
               "queryOwner",
               "queryId",
-              "queryUri"
+              "queryUri",
+              "queryHasNft"
             ),
             recipient: fc.constantFrom(wallet1, wallet2, wallet3, wallet4),
             queryId: fc.nat({ max: 50 }),
@@ -617,15 +751,24 @@ describe("NFT Sequence-Based Fuzz Tests", () => {
           { minLength: 10, maxLength: 30 }
         ),
         (operations) => {
+          const mintedStudents = new Set<string>();
+
           for (const op of operations) {
             if (op.action === "mint") {
               const { result } = simnet.callPublicFn(
                 "btc-university-nft",
-                "mint",
+                "mint-for-student",
                 [Cl.principal(op.recipient)],
                 deployer
               );
+              // Should be ok if not already minted, err otherwise
               expect(["ok", "err"]).toContain(result.type);
+              if (result.type === "ok") {
+                mintedStudents.add(op.recipient);
+              } else if (result.type === "err") {
+                // If error, should be ERR-ALREADY-MINTED (u103)
+                expect((result as any).value.value).toBe(103n);
+              }
             } else if (op.action === "queryOwner") {
               const { result } = simnet.callReadOnlyFn(
                 "btc-university-nft",
@@ -651,6 +794,14 @@ describe("NFT Sequence-Based Fuzz Tests", () => {
               );
               expect(result.type).toBe("ok");
               expect((result as any).value.type).toBe("none");
+            } else if (op.action === "queryHasNft") {
+              const { result } = simnet.callReadOnlyFn(
+                "btc-university-nft",
+                "has-nft",
+                [Cl.principal(op.recipient)],
+                wallet1
+              );
+              expect(result.type).toBe("ok");
             }
           }
         }
@@ -663,16 +814,22 @@ describe("NFT Sequence-Based Fuzz Tests", () => {
     fc.assert(
       fc.property(
         fc.array(fc.constantFrom(wallet1, wallet2, wallet3, wallet4), {
-          minLength: 10,
-          maxLength: 30,
+          minLength: 4,
+          maxLength: 12,
         }),
         (recipients) => {
           const minted: Array<{ tokenId: number; recipient: string }> = [];
+          const mintedStudents = new Set<string>();
 
           for (const recipient of recipients) {
+            // Skip if already minted for this student
+            if (mintedStudents.has(recipient)) {
+              continue;
+            }
+
             const { result } = simnet.callPublicFn(
               "btc-university-nft",
-              "mint",
+              "mint-for-student",
               [Cl.principal(recipient)],
               deployer
             );
@@ -680,6 +837,7 @@ describe("NFT Sequence-Based Fuzz Tests", () => {
             if (result.type === "ok") {
               const tokenId = Number((result as any).value.value);
               minted.push({ tokenId, recipient });
+              mintedStudents.add(recipient);
             }
           }
 
@@ -708,21 +866,29 @@ describe("NFT Sequence-Based Fuzz Tests", () => {
     fc.assert(
       fc.property(
         fc.array(fc.constantFrom(wallet1, wallet2, wallet3), {
-          minLength: 5,
-          maxLength: 15,
+          minLength: 3,
+          maxLength: 9,
         }),
         (recipients) => {
+          const mintedStudents = new Set<string>();
+
           for (const recipient of recipients) {
+            // Skip if already minted for this student
+            if (mintedStudents.has(recipient)) {
+              continue;
+            }
+
             // Mint
             const mintResult = simnet.callPublicFn(
               "btc-university-nft",
-              "mint",
+              "mint-for-student",
               [Cl.principal(recipient)],
               deployer
             );
 
             if (mintResult.result.type === "ok") {
               const tokenId = Number((mintResult.result as any).value.value);
+              mintedStudents.add(recipient);
 
               // Immediately query owner
               const ownerResult = simnet.callReadOnlyFn(
@@ -764,21 +930,33 @@ describe("NFT Sequence-Based Fuzz Tests", () => {
 // ==============================
 
 describe("NFT Stress & Chaos Tests", () => {
-  it("STRESS: Rapid consecutive mints", () => {
+  it("STRESS: Rapid consecutive mints to unique students", () => {
     const recipients = [wallet1, wallet2, wallet3, wallet4];
-    const numMints = 50;
+    const mintedStudents = new Set<string>();
+    let successfulMints = 0;
 
-    for (let i = 0; i < numMints; i++) {
+    // Try to mint 50 times, but only 4 should succeed (one per student)
+    for (let i = 0; i < 50; i++) {
       const recipient = recipients[i % recipients.length];
       const { result } = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(recipient)],
         deployer
       );
 
-      expect(result.type).toBe("ok");
+      if (result.type === "ok") {
+        expect(mintedStudents.has(recipient)).toBe(false);
+        mintedStudents.add(recipient);
+        successfulMints++;
+      } else {
+        // Should fail with ERR-ALREADY-MINTED
+        expect((result as any).value.value).toBe(103n);
+      }
     }
+
+    // Only 4 mints should succeed (one per unique student)
+    expect(successfulMints).toBe(recipients.length);
 
     // Verify final state
     const { result } = simnet.callReadOnlyFn(
@@ -789,7 +967,7 @@ describe("NFT Stress & Chaos Tests", () => {
     );
 
     expect(result.type).toBe("ok");
-    expect(Number((result as any).value.value)).toBe(numMints);
+    expect(Number((result as any).value.value)).toBe(recipients.length);
   });
 
   it("CHAOS: Random mix of all operations", () => {
@@ -802,7 +980,8 @@ describe("NFT Stress & Chaos Tests", () => {
               "mintAsWallet",
               "queryOwner",
               "queryLastId",
-              "queryUri"
+              "queryUri",
+              "queryHasNft"
             ),
             recipient: fc.constantFrom(wallet1, wallet2, wallet3, wallet4),
             caller: fc.constantFrom(
@@ -820,17 +999,18 @@ describe("NFT Stress & Chaos Tests", () => {
           for (const op of operations) {
             try {
               if (op.operation === "mintAsDeployer") {
+                // May succeed or fail with ERR-ALREADY-MINTED
                 simnet.callPublicFn(
                   "btc-university-nft",
-                  "mint",
+                  "mint-for-student",
                   [Cl.principal(op.recipient)],
                   deployer
                 );
               } else if (op.operation === "mintAsWallet") {
-                // Should fail
+                // Should fail with ERR-INSTRUCTOR-ONLY (unless caller is deployer)
                 simnet.callPublicFn(
                   "btc-university-nft",
-                  "mint",
+                  "mint-for-student",
                   [Cl.principal(op.recipient)],
                   op.caller
                 );
@@ -853,6 +1033,13 @@ describe("NFT Stress & Chaos Tests", () => {
                   "btc-university-nft",
                   "get-token-uri",
                   [Cl.uint(op.tokenId)],
+                  op.caller
+                );
+              } else if (op.operation === "queryHasNft") {
+                simnet.callReadOnlyFn(
+                  "btc-university-nft",
+                  "has-nft",
+                  [Cl.principal(op.recipient)],
                   op.caller
                 );
               }
