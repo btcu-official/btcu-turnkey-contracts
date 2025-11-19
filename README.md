@@ -5,7 +5,7 @@ Smart contracts for BTC University - a Bitcoin-powered learning platform using s
 ## Contracts
 
 - `btc-university.clar` - Main contract with course management, enrollment, and sBTC payments
-- `btc-university-nft.clar` - NFT certificates for course completion
+- `btc-university-nft.clar` - NFT certificates for course completion (one per student)
 - `sip010-trait.clar` - SIP-010 fungible token trait for sBTC integration
 - `mock-sbtc-token.clar` - Mock sBTC for testing only (DO NOT deploy to production)
 
@@ -13,7 +13,7 @@ Smart contracts for BTC University - a Bitcoin-powered learning platform using s
 
 Run tests: `npm install && npm test`
 
-All 95 unit tests validate contract functionality with mock sBTC.
+All unit tests validate contract functionality with mock sBTC.
 
 ## Deployment
 
@@ -49,7 +49,16 @@ Contracts use SIP-010 trait-based dependency injection for sBTC integration. Thi
 
 The enrollment system requires users to be whitelisted before enrolling in courses. Whitelist access can be granted by the owner or self-enrolled with sufficient sBTC balance.
 
-Course fees accumulate in contract escrow and can be claimed by instructors. NFT certificates are minted upon course completion.
+Course fees accumulate in contract escrow and can be claimed by instructors.
+
+### NFT Certificate System
+
+Instructors can grant NFT certificates to students for course completion. Each student can receive one NFT per contract, regardless of how many courses they complete. The NFT contract:
+
+- Allows instructors to mint certificates for any student
+- Enforces one NFT per student per contract
+- Tracks all minted NFTs with unique token IDs
+- Provides read-only functions to check NFT ownership and availability
 
 ## Resources
 

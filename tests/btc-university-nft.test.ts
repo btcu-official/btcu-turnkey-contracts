@@ -13,18 +13,111 @@ const wallet4 = accounts.get("wallet_4")!;
 // ==============================
 
 describe("NFT Contract Constants", () => {
-  it("contract owner is the deployer", () => {
-    // This is implicit from the contract definition
-    // contract-owner is set to tx-sender at deployment
+  it("contract deployer is set correctly", () => {
     expect(deployer).toBeDefined();
   });
 
   it("error codes are defined correctly", () => {
-    // Test that error codes are consistent
-    // err-owner-only should be u100
-    // err-not-certi-holder should be u101
-    // These are tested implicitly in other tests
+    // ERR-INSTRUCTOR-ONLY should be u100
+    // ERR-NOT-CERTI-HOLDER should be u101
+    // ERR-INVALID-PRINCIPAL should be u102
+    // ERR-ALREADY-MINTED should be u103
     expect(true).toBe(true);
+  });
+});
+
+// ==============================
+// INSTRUCTOR MANAGEMENT TESTS
+// ==============================
+
+describe("Instructor Management", () => {
+  describe("is-instructor", () => {
+    it("deployer is instructor by default", () => {
+      const { result } = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "is-instructor",
+        [Cl.principal(deployer)],
+        wallet1
+      );
+      expect(result).toEqual(Cl.bool(true));
+    });
+
+    it("non-instructors return false", () => {
+      const result1 = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "is-instructor",
+        [Cl.principal(wallet1)],
+        wallet1
+      );
+      expect(result1.result).toEqual(Cl.bool(false));
+
+      const result2 = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "is-instructor",
+        [Cl.principal(wallet2)],
+        wallet2
+      );
+      expect(result2.result).toEqual(Cl.bool(false));
+    });
+  });
+
+  describe("add-instructor", () => {
+    it("deployer can add new instructor", () => {
+      const { result } = simnet.callPublicFn(
+        "btc-university-nft",
+        "add-instructor",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(result).toBeOk(Cl.bool(true));
+
+      // Verify wallet1 is now an instructor
+      const checkResult = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "is-instructor",
+        [Cl.principal(wallet1)],
+        wallet1
+      );
+      expect(checkResult.result).toEqual(Cl.bool(true));
+    });
+
+    it("instructor can add new instructor", () => {
+      // First add wallet1 as instructor
+      simnet.callPublicFn(
+        "btc-university-nft",
+        "add-instructor",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+
+      // wallet1 adds wallet2
+      const { result } = simnet.callPublicFn(
+        "btc-university-nft",
+        "add-instructor",
+        [Cl.principal(wallet2)],
+        wallet1
+      );
+      expect(result).toBeOk(Cl.bool(true));
+
+      // Verify wallet2 is now an instructor
+      const checkResult = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "is-instructor",
+        [Cl.principal(wallet2)],
+        wallet1
+      );
+      expect(checkResult.result).toEqual(Cl.bool(true));
+    });
+
+    it("non-instructor cannot add instructor", () => {
+      const { result } = simnet.callPublicFn(
+        "btc-university-nft",
+        "add-instructor",
+        [Cl.principal(wallet2)],
+        wallet1
+      );
+      expect(result).toBeErr(Cl.uint(100)); // ERR-INSTRUCTOR-ONLY
+    });
   });
 });
 
@@ -74,7 +167,7 @@ describe("Read-Only Functions", () => {
       // Mint first NFT
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -92,19 +185,19 @@ describe("Read-Only Functions", () => {
       // Mint three NFTs
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet2)],
         deployer
       );
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet3)],
         deployer
       );
@@ -134,7 +227,7 @@ describe("Read-Only Functions", () => {
       // Mint an NFT
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -146,6 +239,99 @@ describe("Read-Only Functions", () => {
         wallet1
       );
       expect(result.result).toBeOk(Cl.none());
+    });
+  });
+
+  describe("has-nft", () => {
+    it("returns false for student without NFT", () => {
+      const { result } = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "has-nft",
+        [Cl.principal(wallet1)],
+        wallet1
+      );
+      expect(result).toBeOk(Cl.bool(false));
+    });
+
+    it("returns true for student with NFT", () => {
+      // Mint NFT for wallet1
+      simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+
+      const result = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "has-nft",
+        [Cl.principal(wallet1)],
+        wallet2
+      );
+      expect(result.result).toBeOk(Cl.bool(true));
+    });
+
+    it("can be called by any address", () => {
+      simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+
+      const result1 = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "has-nft",
+        [Cl.principal(wallet1)],
+        wallet1
+      );
+      expect(result1.result).toBeOk(Cl.bool(true));
+
+      const result2 = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "has-nft",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(result2.result).toBeOk(Cl.bool(true));
+    });
+  });
+
+  describe("get-student-token-id", () => {
+    it("returns none for student without NFT", () => {
+      const { result } = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "get-student-token-id",
+        [Cl.principal(wallet1)],
+        wallet1
+      );
+      expect(result).toBeOk(Cl.none());
+    });
+
+    it("returns token info for student with NFT", () => {
+      // Mint NFT for wallet1
+      simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+
+      const result = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "get-student-token-id",
+        [Cl.principal(wallet1)],
+        wallet2
+      );
+      
+      expect(result.result).toBeOk(
+        Cl.some(
+          Cl.tuple({
+            "token-id": Cl.uint(1),
+            minted: Cl.bool(true),
+          })
+        )
+      );
     });
 
     it("can be called by any address", () => {
@@ -208,7 +394,7 @@ describe("Read-Only Functions", () => {
       // Mint NFT for wallet1
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -226,19 +412,19 @@ describe("Read-Only Functions", () => {
       // Mint NFTs for different wallets
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet2)],
         deployer
       );
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet3)],
         deployer
       );
@@ -271,7 +457,7 @@ describe("Read-Only Functions", () => {
     it("can be called by any address", () => {
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -319,34 +505,129 @@ describe("Read-Only Functions", () => {
 
 describe("Mint Function", () => {
   describe("Authorization", () => {
-    it("allows contract owner to mint", () => {
+    it("allows deployer (instructor) to mint", () => {
       const { result } = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
       expect(result).toBeOk(Cl.uint(1));
     });
 
-    it("prevents non-owner from minting", () => {
+    it("allows added instructor to mint", () => {
+      // Add wallet1 as instructor
+      simnet.callPublicFn(
+        "btc-university-nft",
+        "add-instructor",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+
+      // wallet1 can now mint
       const { result } = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet2)],
         wallet1
       );
-      expect(result).toBeErr(Cl.uint(100)); // err-owner-only
+      expect(result).toBeOk(Cl.uint(1));
     });
 
-    it("prevents user from minting for themselves", () => {
+    it("prevents non-instructor from minting", () => {
       const { result } = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
+        [Cl.principal(wallet2)],
+        wallet1
+      );
+      expect(result).toBeErr(Cl.uint(100)); // ERR-INSTRUCTOR-ONLY
+    });
+
+    it("prevents user from minting for themselves if not instructor", () => {
+      const { result } = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         wallet1
       );
-      expect(result).toBeErr(Cl.uint(100)); // err-owner-only
+      expect(result).toBeErr(Cl.uint(100)); // ERR-INSTRUCTOR-ONLY
+    });
+  });
+
+  describe("One NFT Per Student", () => {
+    it("prevents minting duplicate NFT for same student", () => {
+      // First mint succeeds
+      const result1 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(result1.result).toBeOk(Cl.uint(1));
+
+      // Second mint for same student fails
+      const result2 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(result2.result).toBeErr(Cl.uint(103)); // ERR-ALREADY-MINTED
+    });
+
+    it("different students can each receive one NFT", () => {
+      const result1 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(result1.result).toBeOk(Cl.uint(1));
+
+      const result2 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet2)],
+        deployer
+      );
+      expect(result2.result).toBeOk(Cl.uint(2));
+
+      const result3 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet3)],
+        deployer
+      );
+      expect(result3.result).toBeOk(Cl.uint(3));
+    });
+
+    it("different instructors cannot mint duplicate NFT for same student", () => {
+      // Add wallet2 as instructor
+      simnet.callPublicFn(
+        "btc-university-nft",
+        "add-instructor",
+        [Cl.principal(wallet2)],
+        deployer
+      );
+
+      // Deployer mints for wallet1
+      const result1 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(result1.result).toBeOk(Cl.uint(1));
+
+      // wallet2 (instructor) tries to mint for wallet1 again
+      const result2 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        wallet2
+      );
+      expect(result2.result).toBeErr(Cl.uint(103)); // ERR-ALREADY-MINTED
     });
   });
 
@@ -354,7 +635,7 @@ describe("Mint Function", () => {
     it("first mint returns token ID 1", () => {
       const { result } = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -364,7 +645,7 @@ describe("Mint Function", () => {
     it("increments token ID for each mint", () => {
       const result1 = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -372,7 +653,7 @@ describe("Mint Function", () => {
 
       const result2 = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet2)],
         deployer
       );
@@ -380,7 +661,7 @@ describe("Mint Function", () => {
 
       const result3 = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet3)],
         deployer
       );
@@ -389,12 +670,13 @@ describe("Mint Function", () => {
 
     it("token IDs are sequential and monotonic", () => {
       const tokenIds = [];
+      const wallets = [wallet1, wallet2, wallet3, wallet4, deployer];
 
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < wallets.length; i++) {
         const result = simnet.callPublicFn(
           "btc-university-nft",
-          "mint",
-          [Cl.principal(wallet1)],
+          "mint-for-student",
+          [Cl.principal(wallets[i])],
           deployer
         );
         const tokenId = (result.result as any).value.value;
@@ -412,7 +694,7 @@ describe("Mint Function", () => {
     it("mints NFT to specified recipient", () => {
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -429,19 +711,19 @@ describe("Mint Function", () => {
     it("allows minting to different recipients", () => {
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet2)],
         deployer
       );
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet3)],
         deployer
       );
@@ -471,26 +753,35 @@ describe("Mint Function", () => {
       expect(owner3.result).toBeOk(Cl.some(Cl.principal(wallet3)));
     });
 
-    it("allows minting multiple NFTs to same recipient", () => {
-      simnet.callPublicFn(
+    it("prevents minting multiple NFTs to same recipient", () => {
+      // First mint succeeds
+      const result1 = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
-      simnet.callPublicFn(
-        "btc-university-nft",
-        "mint",
-        [Cl.principal(wallet1)],
-        deployer
-      );
-      simnet.callPublicFn(
-        "btc-university-nft",
-        "mint",
-        [Cl.principal(wallet1)],
-        deployer
-      );
+      expect(result1.result).toBeOk(Cl.uint(1));
 
+      // Second mint fails
+      const result2 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(result2.result).toBeErr(Cl.uint(103)); // ERR-ALREADY-MINTED
+
+      // Third mint also fails
+      const result3 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(result3.result).toBeErr(Cl.uint(103)); // ERR-ALREADY-MINTED
+
+      // Only token 1 exists
       const owner1 = simnet.callReadOnlyFn(
         "btc-university-nft",
         "get-owner",
@@ -499,27 +790,20 @@ describe("Mint Function", () => {
       );
       expect(owner1.result).toBeOk(Cl.some(Cl.principal(wallet1)));
 
+      // Token 2 doesn't exist
       const owner2 = simnet.callReadOnlyFn(
         "btc-university-nft",
         "get-owner",
         [Cl.uint(2)],
         deployer
       );
-      expect(owner2.result).toBeOk(Cl.some(Cl.principal(wallet1)));
-
-      const owner3 = simnet.callReadOnlyFn(
-        "btc-university-nft",
-        "get-owner",
-        [Cl.uint(3)],
-        deployer
-      );
-      expect(owner3.result).toBeOk(Cl.some(Cl.principal(wallet1)));
+      expect(owner2.result).toBeOk(Cl.none());
     });
 
     it("can mint to deployer address", () => {
       const { result } = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(deployer)],
         deployer
       );
@@ -547,7 +831,7 @@ describe("Mint Function", () => {
 
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -561,24 +845,41 @@ describe("Mint Function", () => {
       expect(afterMint.result).toBeOk(Cl.uint(1));
     });
 
-    it("maintains state consistency across multiple mints", () => {
-      for (let i = 1; i <= 10; i++) {
-        const mintResult = simnet.callPublicFn(
-          "btc-university-nft",
-          "mint",
-          [Cl.principal(wallet1)],
-          deployer
-        );
-        expect(mintResult.result).toBeOk(Cl.uint(i));
+    it("maintains state consistency for single student mint", () => {
+      // First mint succeeds
+      const mintResult = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(mintResult.result).toBeOk(Cl.uint(1));
 
-        const lastId = simnet.callReadOnlyFn(
-          "btc-university-nft",
-          "get-last-token-id",
-          [],
-          wallet1
-        );
-        expect(lastId.result).toBeOk(Cl.uint(i));
-      }
+      const lastId = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "get-last-token-id",
+        [],
+        wallet1
+      );
+      expect(lastId.result).toBeOk(Cl.uint(1));
+
+      // Second mint for same student fails
+      const mintResult2 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(mintResult2.result).toBeErr(Cl.uint(103)); // ERR-ALREADY-MINTED
+
+      // Last token ID remains 1
+      const lastId2 = simnet.callReadOnlyFn(
+        "btc-university-nft",
+        "get-last-token-id",
+        [],
+        wallet1
+      );
+      expect(lastId2.result).toBeOk(Cl.uint(1));
     });
   });
 });
@@ -591,12 +892,14 @@ describe("Edge Cases and Security", () => {
   describe("NFT Uniqueness", () => {
     it("each minted NFT has unique token ID", () => {
       const tokenIds = new Set();
+      const wallets = [wallet1, wallet2, wallet3, wallet4];
 
-      for (let i = 0; i < 20; i++) {
+      // Mint NFT for each wallet
+      for (let i = 0; i < wallets.length; i++) {
         const result = simnet.callPublicFn(
           "btc-university-nft",
-          "mint",
-          [Cl.principal(wallet1)],
+          "mint-for-student",
+          [Cl.principal(wallets[i])],
           deployer
         );
         const tokenId = (result.result as any).value.value;
@@ -604,7 +907,13 @@ describe("Edge Cases and Security", () => {
       }
 
       // All token IDs should be unique
-      expect(tokenIds.size).toBe(20);
+      expect(tokenIds.size).toBe(wallets.length);
+      
+      // Verify each token ID is sequential
+      const tokenIdArray = Array.from(tokenIds).map(id => Number(id)).sort((a, b) => a - b);
+      for (let i = 0; i < tokenIdArray.length; i++) {
+        expect(tokenIdArray[i]).toBe(i + 1);
+      }
     });
 
     it("NFT cannot be minted with same ID twice", () => {
@@ -612,7 +921,7 @@ describe("Edge Cases and Security", () => {
       // and nft-mint? failure for duplicate IDs
       const result1 = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -620,7 +929,7 @@ describe("Edge Cases and Security", () => {
 
       const result2 = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet2)],
         deployer
       );
@@ -634,78 +943,94 @@ describe("Edge Cases and Security", () => {
   });
 
   describe("Access Control", () => {
-    it("only deployer can mint - comprehensive check", () => {
-      // Try with wallet1
+    it("only instructors can mint - comprehensive check", () => {
+      // Try with non-instructor wallet1
       const result1 = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
-        [Cl.principal(wallet1)],
+        "mint-for-student",
+        [Cl.principal(wallet4)],
         wallet1
       );
-      expect(result1.result).toBeErr(Cl.uint(100));
+      expect(result1.result).toBeErr(Cl.uint(100)); // ERR-INSTRUCTOR-ONLY
 
-      // Try with wallet2
+      // Try with non-instructor wallet2
       const result2 = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
-        [Cl.principal(wallet2)],
+        "mint-for-student",
+        [Cl.principal(wallet4)],
         wallet2
       );
-      expect(result2.result).toBeErr(Cl.uint(100));
+      expect(result2.result).toBeErr(Cl.uint(100)); // ERR-INSTRUCTOR-ONLY
 
-      // Try with wallet3
-      const result3 = simnet.callPublicFn(
+      // Add wallet3 as instructor
+      simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "add-instructor",
         [Cl.principal(wallet3)],
-        wallet3
-      );
-      expect(result3.result).toBeErr(Cl.uint(100));
-
-      // Deployer can mint
-      const result4 = simnet.callPublicFn(
-        "btc-university-nft",
-        "mint",
-        [Cl.principal(wallet1)],
         deployer
       );
-      expect(result4.result).toBeOk(Cl.uint(1));
+
+      // wallet3 (instructor) can mint
+      const result3 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        wallet3
+      );
+      expect(result3.result).toBeOk(Cl.uint(1));
+
+      // Deployer (default instructor) can mint
+      const result4 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet2)],
+        deployer
+      );
+      expect(result4.result).toBeOk(Cl.uint(2));
     });
 
-    it("contract-caller must be contract-owner", () => {
-      // The contract uses contract-caller check
-      // This prevents indirect calls from unauthorized contracts
+    it("tx-sender must be an instructor", () => {
+      // Non-instructors cannot mint
       const { result } = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         wallet2
       );
-      expect(result).toBeErr(Cl.uint(100));
+      expect(result).toBeErr(Cl.uint(100)); // ERR-INSTRUCTOR-ONLY
     });
   });
 
   describe("Large Scale Operations", () => {
-    it("can mint many NFTs sequentially", () => {
-      const numberOfMints = 50;
+    it("enforces one NFT per student even at scale", () => {
+      // First mint succeeds
+      const result1 = simnet.callPublicFn(
+        "btc-university-nft",
+        "mint-for-student",
+        [Cl.principal(wallet1)],
+        deployer
+      );
+      expect(result1.result).toBeOk(Cl.uint(1));
 
-      for (let i = 1; i <= numberOfMints; i++) {
+      // All subsequent mints for same student fail
+      for (let i = 2; i <= 10; i++) {
         const result = simnet.callPublicFn(
           "btc-university-nft",
-          "mint",
+          "mint-for-student",
           [Cl.principal(wallet1)],
           deployer
         );
-        expect(result.result).toBeOk(Cl.uint(i));
+        expect(result.result).toBeErr(Cl.uint(103)); // ERR-ALREADY-MINTED
       }
 
+      // Last token ID is still 1
       const lastId = simnet.callReadOnlyFn(
         "btc-university-nft",
         "get-last-token-id",
         [],
         wallet1
       );
-      expect(lastId.result).toBeOk(Cl.uint(numberOfMints));
+      expect(lastId.result).toBeOk(Cl.uint(1));
     });
 
     it("handles minting to many different recipients", () => {
@@ -714,7 +1039,7 @@ describe("Edge Cases and Security", () => {
       recipients.forEach((recipient, index) => {
         const result = simnet.callPublicFn(
           "btc-university-nft",
-          "mint",
+          "mint-for-student",
           [Cl.principal(recipient)],
           deployer
         );
@@ -740,15 +1065,15 @@ describe("Edge Cases and Security", () => {
         { recipient: wallet1, expectedId: 1 },
         { recipient: wallet2, expectedId: 2 },
         { recipient: wallet3, expectedId: 3 },
-        { recipient: wallet1, expectedId: 4 },
-        { recipient: wallet2, expectedId: 5 },
+        { recipient: wallet4, expectedId: 4 },
+        { recipient: deployer, expectedId: 5 },
       ];
 
-      // Mint all tokens
+      // Mint all tokens (each student gets one)
       mints.forEach(({ recipient }) => {
         simnet.callPublicFn(
           "btc-university-nft",
-          "mint",
+          "mint-for-student",
           [Cl.principal(recipient)],
           deployer
         );
@@ -766,17 +1091,18 @@ describe("Edge Cases and Security", () => {
       });
     });
 
-    it("last-token-id reflects actual number of mints", () => {
-      const numberOfMints = 15;
-
-      for (let i = 0; i < numberOfMints; i++) {
+    it("last-token-id reflects actual number of unique students minted", () => {
+      // Mint for 4 different students
+      const wallets = [wallet1, wallet2, wallet3, wallet4];
+      
+      wallets.forEach((wallet) => {
         simnet.callPublicFn(
           "btc-university-nft",
-          "mint",
-          [Cl.principal(wallet1)],
+          "mint-for-student",
+          [Cl.principal(wallet)],
           deployer
         );
-      }
+      });
 
       const lastId = simnet.callReadOnlyFn(
         "btc-university-nft",
@@ -784,7 +1110,7 @@ describe("Edge Cases and Security", () => {
         [],
         wallet1
       );
-      expect(lastId.result).toBeOk(Cl.uint(numberOfMints));
+      expect(lastId.result).toBeOk(Cl.uint(wallets.length));
     });
   });
 
@@ -792,7 +1118,7 @@ describe("Edge Cases and Security", () => {
     it("queries for high token IDs return none when not minted", () => {
       simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -818,7 +1144,7 @@ describe("Edge Cases and Security", () => {
     it("can query token ID immediately after minting", () => {
       const mintResult = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
@@ -850,10 +1176,10 @@ describe("Integration Scenarios", () => {
     );
     expect(initialCount.result).toBeOk(Cl.uint(0));
 
-    // 2. Mint certificate
+    // 2. Mint certificate for student
     const mintResult = simnet.callPublicFn(
       "btc-university-nft",
-      "mint",
+      "mint-for-student",
       [Cl.principal(wallet1)],
       deployer
     );
@@ -899,7 +1225,7 @@ describe("Integration Scenarios", () => {
     students.forEach((student, index) => {
       const mintResult = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(student.wallet)],
         deployer
       );
@@ -925,38 +1251,52 @@ describe("Integration Scenarios", () => {
     expect(finalCount.result).toBeOk(Cl.uint(students.length));
   });
 
-  it("student earning multiple course certificates", () => {
-    const numberOfCourses = 5;
+  it("student can only earn one certificate", () => {
+    // Student completes first course and gets NFT
+    const mintResult1 = simnet.callPublicFn(
+      "btc-university-nft",
+      "mint-for-student",
+      [Cl.principal(wallet1)],
+      deployer
+    );
+    expect(mintResult1.result).toBeOk(Cl.uint(1));
 
-    // Student completes multiple courses
-    for (let i = 1; i <= numberOfCourses; i++) {
+    // Student completes more courses but cannot get more NFTs
+    for (let i = 2; i <= 5; i++) {
       const mintResult = simnet.callPublicFn(
         "btc-university-nft",
-        "mint",
+        "mint-for-student",
         [Cl.principal(wallet1)],
         deployer
       );
-      expect(mintResult.result).toBeOk(Cl.uint(i));
+      expect(mintResult.result).toBeErr(Cl.uint(103)); // ERR-ALREADY-MINTED
     }
 
-    // Verify all NFTs belong to same student
-    for (let i = 1; i <= numberOfCourses; i++) {
-      const owner = simnet.callReadOnlyFn(
-        "btc-university-nft",
-        "get-owner",
-        [Cl.uint(i)],
-        deployer
-      );
-      expect(owner.result).toBeOk(Cl.some(Cl.principal(wallet1)));
-    }
+    // Verify student has only one NFT (token ID 1)
+    const owner = simnet.callReadOnlyFn(
+      "btc-university-nft",
+      "get-owner",
+      [Cl.uint(1)],
+      deployer
+    );
+    expect(owner.result).toBeOk(Cl.some(Cl.principal(wallet1)));
 
-    // Verify count
+    // Verify only one token was minted
     const count = simnet.callReadOnlyFn(
       "btc-university-nft",
       "get-last-token-id",
       [],
       wallet1
     );
-    expect(count.result).toBeOk(Cl.uint(numberOfCourses));
+    expect(count.result).toBeOk(Cl.uint(1));
+
+    // Verify has-nft returns true
+    const hasNft = simnet.callReadOnlyFn(
+      "btc-university-nft",
+      "has-nft",
+      [Cl.principal(wallet1)],
+      wallet1
+    );
+    expect(hasNft.result).toBeOk(Cl.bool(true));
   });
 });
